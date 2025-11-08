@@ -9,7 +9,7 @@ import DashboardOverview from "@/components/app/DashboardOverview";
 type View = "overview" | "consultation" | "notes" | "tasks" | "patients";
 
 const Dashboard = () => {
-  const [currentView, setCurrentView] = useState<View>("overview");
+  const [currentView, setCurrentView] = useState<View>("consultation");
 
   const renderView = () => {
     switch (currentView) {
