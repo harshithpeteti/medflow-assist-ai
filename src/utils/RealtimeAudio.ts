@@ -183,31 +183,31 @@ export class RealtimeChat {
 
       case 'input_audio_buffer.speech_started':
         console.log('User started speaking');
-        this.lastSpeechTime = Date.now();
         this.currentTranscript = '';
         break;
 
       case 'input_audio_buffer.speech_stopped':
         console.log('User stopped speaking');
-        // Detect speaker change based on silence duration
-        if (this.currentTranscript) {
-          this.onTranscript({
-            speaker: this.currentSpeaker,
-            text: this.currentTranscript.trim(),
-            timestamp: Date.now()
-          });
-          this.currentTranscript = '';
+        break;
+
+      case 'conversation.item.input_audio_transcription.delta':
+        // Process partial transcripts in real-time
+        if (event.delta) {
+          this.currentTranscript += event.delta;
         }
         break;
 
       case 'conversation.item.input_audio_transcription.completed':
         console.log('Transcription completed:', event.transcript);
-        this.currentTranscript = event.transcript;
-        // Toggle speaker based on conversation flow
-        const silenceDuration = Date.now() - this.lastSpeechTime;
-        if (silenceDuration > 2000) {
-          this.currentSpeaker = this.currentSpeaker === 'doctor' ? 'patient' : 'doctor';
+        // Emit immediately when transcription is complete
+        if (event.transcript && event.transcript.trim()) {
+          this.onTranscript({
+            speaker: this.currentSpeaker,
+            text: event.transcript.trim(),
+            timestamp: Date.now()
+          });
         }
+        this.currentTranscript = '';
         break;
 
       case 'response.audio.delta':
