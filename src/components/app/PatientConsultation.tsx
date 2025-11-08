@@ -355,17 +355,28 @@ const PatientConsultation = () => {
   };
 
   const generateRecommendedQuestions = async () => {
-    if (!transcript) return;
+    if (!transcript || transcript.length < 50) return;
     
-    // Generate recommended follow-up questions based on transcript
-    const questions = [
-      "Can you describe the pain level on a scale of 1-10?",
-      "Have you experienced any side effects from current medications?",
-      "Are there any activities that worsen your symptoms?",
-      "Have you noticed any triggers for your condition?",
-      "How has this affected your daily activities?"
-    ];
-    setRecommendedQuestions(questions);
+    try {
+      const { data: questions, error } = await supabase.functions.invoke(
+        "generate-questions",
+        { body: { transcript } }
+      );
+
+      if (error) throw error;
+      
+      if (questions && Array.isArray(questions)) {
+        setRecommendedQuestions(questions);
+      }
+    } catch (error: any) {
+      console.error("Error generating questions:", error);
+      // Fallback to generic questions on error
+      setRecommendedQuestions([
+        "Can you describe the pain level on a scale of 1-10?",
+        "Have you experienced any side effects from current medications?",
+        "Are there any activities that worsen your symptoms?"
+      ]);
+    }
   };
 
   return (
