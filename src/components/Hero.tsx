@@ -29,8 +29,8 @@ const Hero = () => {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button variant="hero" size="lg" className="group">
-                Request a Demo
+              <Button variant="hero" size="lg" className="group" onClick={() => window.location.href = '/app'}>
+                Try Demo
                 <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Button>
               <Button variant="outline" size="lg" className="group">

@@ -32,10 +32,10 @@ const Navigation = () => {
           
           {/* CTA Buttons */}
           <div className="flex items-center gap-3">
-            <Button variant="ghost" className="hidden sm:flex">
+            <Button variant="ghost" className="hidden sm:flex" onClick={() => window.location.href = '/app'}>
               Sign In
             </Button>
-            <Button variant="default" className="shadow-elevated">
+            <Button variant="default" className="shadow-elevated" onClick={() => window.location.href = '/app'}>
               Get Started
             </Button>
           </div>
