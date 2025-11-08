@@ -72,10 +72,10 @@ const PatientConsultation = () => {
   }>>([]);
 
   const { 
-    transcript,
     isListening,
     currentSpeaker: detectedSpeaker,
     toggleSpeaker,
+    segments,
     startRecording: startVoiceRecording,
     stopRecording: stopVoiceRecording,
     error: voiceError
@@ -84,36 +84,14 @@ const PatientConsultation = () => {
   });
 
   
-  const lastTranscriptLength = useRef(0);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
-  const lastSpeaker = useRef<"doctor" | "patient">("doctor");
   
+  // Update conversation transcript from realtime segments
   useEffect(() => {
-    if (transcript.length > lastTranscriptLength.current && isRecording) {
-      const newText = transcript.substring(lastTranscriptLength.current);
-      if (newText.trim()) {
-        setConversationTranscript(prev => {
-          if (prev.length === 0 || lastSpeaker.current !== detectedSpeaker) {
-            lastSpeaker.current = detectedSpeaker;
-            return [...prev, {
-              speaker: detectedSpeaker,
-              text: newText,
-              timestamp: Date.now()
-            }];
-          }
-          
-          const updated = [...prev];
-          const lastEntry = updated[updated.length - 1];
-          updated[updated.length - 1] = {
-            ...lastEntry,
-            text: lastEntry.text + " " + newText
-          };
-          return updated;
-        });
-        lastTranscriptLength.current = transcript.length;
-      }
+    if (segments.length > 0) {
+      setConversationTranscript(segments);
     }
-  }, [transcript, detectedSpeaker, isRecording]);
+  }, [segments]);
 
   useEffect(() => {
     if (transcriptEndRef.current) {
@@ -275,12 +253,9 @@ const PatientConsultation = () => {
     try {
       setIsRecording(true);
       setConversationTranscript([]);
-      lastTranscriptLength.current = 0;
-      lastSpeaker.current = "doctor";
-      setCurrentSpeaker("doctor");
       
       await startVoiceRecording();
-      toast.success("Recording started - Speaker detection active");
+      toast.success("Recording started - Automatic speaker detection active");
     } catch (error) {
       console.error("Error starting recording:", error);
       toast.error("Failed to start recording");
@@ -294,12 +269,17 @@ const PatientConsultation = () => {
     await stopVoiceRecording();
     toast.success("Recording stopped - Analyzing consultation...");
     
-    if (!transcript || transcript.length < 50) {
+    // Build transcript from segments
+    const fullTranscript = conversationTranscript
+      .map(seg => `[${seg.speaker}] ${seg.text}`)
+      .join(' ');
+    
+    if (!fullTranscript || fullTranscript.length < 50) {
       toast.error("Transcript too short to analyze");
       return;
     }
 
-    await detectTasksFromTranscript(transcript);
+    await detectTasksFromTranscript(fullTranscript);
   };
 
   const addManualTask = () => {
@@ -918,7 +898,7 @@ const PatientConsultation = () => {
                         Click "Record" to begin transcribing the conversation...
                       </p>
                       <p className="text-xs text-muted-foreground mt-2">
-                        Use the speaker toggle button while recording to switch between doctor and patient
+                        Automatic speaker detection with OpenAI Realtime API
                       </p>
                     </div>
                   )}

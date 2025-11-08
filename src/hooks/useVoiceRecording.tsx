@@ -1,10 +1,15 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { RealtimeChat } from "@/utils/RealtimeAudio";
 
 interface VoiceRecordingOptions {
   language?: string;
-  onSpeakerDetected?: (speaker: 'doctor' | 'patient') => void;
+}
+
+interface TranscriptSegment {
+  speaker: 'doctor' | 'patient';
+  text: string;
+  timestamp: number;
 }
 
 export const useVoiceRecording = (options: VoiceRecordingOptions = {}) => {
@@ -12,138 +17,55 @@ export const useVoiceRecording = (options: VoiceRecordingOptions = {}) => {
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [currentSpeaker, setCurrentSpeaker] = useState<'doctor' | 'patient'>('doctor');
+  const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
-  const speakerAtRecordingRef = useRef<'doctor' | 'patient'>('doctor');
+  const realtimeChatRef = useRef<RealtimeChat | null>(null);
+
+  const handleTranscript = useCallback((segment: TranscriptSegment) => {
+    console.log('New transcript segment:', segment);
+    setSegments(prev => [...prev, segment]);
+    setTranscript(prev => prev + `[${segment.speaker === 'doctor' ? 'Doctor' : 'Patient'}] ${segment.text} `);
+  }, []);
+
+  const handleError = useCallback((errorMsg: string) => {
+    console.error('Realtime error:', errorMsg);
+    setError(errorMsg);
+    toast.error(errorMsg);
+  }, []);
 
   const toggleSpeaker = useCallback(() => {
-    setCurrentSpeaker(prev => prev === 'doctor' ? 'patient' : 'doctor');
-  }, []);
+    const newSpeaker = currentSpeaker === 'doctor' ? 'patient' : 'doctor';
+    setCurrentSpeaker(newSpeaker);
+    realtimeChatRef.current?.setCurrentSpeaker(newSpeaker);
+    console.log('Toggled speaker to:', newSpeaker);
+  }, [currentSpeaker]);
 
   const startRecording = useCallback(async () => {
     try {
-      // Request microphone permission
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        } 
-      });
+      console.log('Starting realtime recording...');
+      setError(null);
       
-      streamRef.current = stream;
-      audioChunksRef.current = [];
+      realtimeChatRef.current = new RealtimeChat(handleTranscript, handleError);
+      await realtimeChatRef.current.init();
       
-      // Store the current speaker at the time of starting this recording chunk
-      speakerAtRecordingRef.current = currentSpeaker;
-
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        console.log("Recording stopped, processing audio...");
-        
-        if (audioChunksRef.current.length === 0) {
-          console.log("No audio data captured");
-          return;
-        }
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        
-        // Convert blob to base64
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const base64Audio = (reader.result as string).split(',')[1];
-          
-          try {
-            console.log("Sending audio to Whisper API...");
-            const { data, error } = await supabase.functions.invoke('transcribe-audio', {
-              body: { 
-                audio: base64Audio,
-                language: options.language || 'auto'
-              }
-            });
-
-            if (error) {
-              console.error("Transcription error:", error);
-              toast.error("Transcription failed");
-              setError(error.message);
-              return;
-            }
-
-            if (data?.text) {
-              console.log("Transcription received:", data.text);
-              // Use the speaker that was active when this chunk was recorded
-              const speakerLabel = speakerAtRecordingRef.current === 'doctor' ? '[Doctor]' : '[Patient]';
-              setTranscript(prev => prev + `${speakerLabel} ${data.text} `);
-            }
-          } catch (err) {
-            console.error("Error calling transcription:", err);
-            toast.error("Failed to transcribe audio");
-            setError(err instanceof Error ? err.message : "Transcription failed");
-          }
-        };
-        
-        reader.readAsDataURL(audioBlob);
-      };
-
-      mediaRecorderRef.current = mediaRecorder;
-      
-      // Start recording in chunks (every 3 seconds)
-      mediaRecorder.start();
       setIsRecording(true);
-      
-      // Automatically stop and restart to create chunks for real-time transcription
-      const chunkInterval = setInterval(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-          mediaRecorderRef.current.stop();
-          audioChunksRef.current = [];
-          // Update the speaker reference for the next chunk
-          speakerAtRecordingRef.current = currentSpeaker;
-          mediaRecorderRef.current.start();
-        }
-      }, 1500);
-
-      // Store interval for cleanup
-      (mediaRecorderRef.current as any).chunkInterval = chunkInterval;
-
-      console.log("Recording started with OpenAI Whisper");
+      toast.success("Voice recording started");
+      console.log("Realtime recording started");
 
     } catch (error) {
       console.error("Error starting recording:", error);
       toast.error("Failed to start recording");
       setError("Failed to start recording. Please check microphone permissions.");
     }
-  }, []);
+  }, [handleTranscript, handleError]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current) {
-      // Clear chunk interval
-      const interval = (mediaRecorderRef.current as any).chunkInterval;
-      if (interval) {
-        clearInterval(interval);
-      }
-      
-      mediaRecorderRef.current.stop();
+    if (realtimeChatRef.current) {
+      realtimeChatRef.current.disconnect();
+      realtimeChatRef.current = null;
       setIsRecording(false);
-      
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
-      
-      mediaRecorderRef.current = null;
       console.log("Recording stopped");
+      toast.info("Recording stopped");
     }
   }, []);
 
@@ -151,10 +73,20 @@ export const useVoiceRecording = (options: VoiceRecordingOptions = {}) => {
     return transcript;
   }, [transcript]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (realtimeChatRef.current) {
+        realtimeChatRef.current.disconnect();
+      }
+    };
+  }, []);
+
   return {
     isRecording,
     isListening: isRecording,
     transcript,
+    segments,
     currentSpeaker,
     toggleSpeaker,
     startRecording,
