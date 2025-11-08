@@ -424,7 +424,7 @@ const PatientConsultation = () => {
     try {
       toast.info("Generating SOAP note...");
       const { data, error } = await supabase.functions.invoke("generate-soap-note-ai", {
-        body: { transcription: fullTranscript }
+        body: { transcript: fullTranscript }
       });
 
       if (error) throw error;
