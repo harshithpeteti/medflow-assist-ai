@@ -6,9 +6,25 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mic, MicOff, Save, Search, User, AlertCircle, Beaker, Pill, UserPlus, Clock, Activity, Syringe, FileText as FileTextIcon, Stethoscope } from "lucide-react";
+import { Mic, MicOff, Save, Search, User, AlertCircle, Beaker, Pill, UserPlus, Clock, Activity, Syringe, FileText as FileTextIcon, Stethoscope, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import TaskReviewModal from "./TaskReviewModal";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface DetectedTask {
   id: string;
@@ -24,6 +40,10 @@ const PatientConsultation = () => {
   const [isRecording, setIsRecording] = useState(true);
   const [selectedTask, setSelectedTask] = useState<DetectedTask | null>(null);
   const [conversationEnded, setConversationEnded] = useState(false);
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [newTaskType, setNewTaskType] = useState<DetectedTask["type"]>("Lab Order");
+  const [newTaskDescription, setNewTaskDescription] = useState("");
+  const [liveTranscript, setLiveTranscript] = useState("Patient: I've been having chest pain for the past few days...\n\nDoctor: Can you describe the pain? Is it sharp or dull?\n\nPatient: It's more of a dull ache, especially when I climb stairs.\n\nDoctor: Any shortness of breath with it?\n\nPatient: Yes, I get a bit winded...");
   const { toast } = useToast();
 
   const soapNote = {
@@ -69,6 +89,25 @@ const PatientConsultation = () => {
       title: "Consultation Ended",
       description: "SOAP note generated successfully",
     });
+  };
+
+  const handleAddTask = () => {
+    if (!newTaskDescription.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a task description",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Task Added",
+      description: `${newTaskType} has been added to the queue`,
+    });
+    setIsAddingTask(false);
+    setNewTaskDescription("");
+    setNewTaskType("Lab Order");
   };
 
   const getTaskIcon = (type: DetectedTask["type"]) => {
@@ -128,65 +167,25 @@ const PatientConsultation = () => {
 
       {/* Main Content Area */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* SOAP Notes */}
-        <Card className="p-6 h-[500px] flex flex-col">
+        {/* AI Detected Tasks - LEFT SIDE */}
+        <Card className="p-6 h-[600px] flex flex-col">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <FileTextIcon className="h-5 w-5 text-primary" />
-              Clinical Documentation
-            </h3>
-            {conversationEnded && (
-              <Button variant="outline" size="sm" className="gap-2">
-                <Save className="h-4 w-4" />
-                Save Note
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-primary" />
+                Tasks
+                <Badge variant="secondary" className="ml-2">{detectedTasks.length}</Badge>
+              </h3>
+            </div>
+            <Button 
+              size="sm" 
+              onClick={() => setIsAddingTask(true)}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Task
+            </Button>
           </div>
-          
-          <ScrollArea className="flex-1">
-            {isRecording ? (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                <div className="flex gap-1 mb-4">
-                  <span className="w-2 h-8 bg-primary rounded-full animate-pulse" />
-                  <span className="w-2 h-8 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                  <span className="w-2 h-8 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
-                </div>
-                <p className="text-sm">Listening to consultation...</p>
-                <p className="text-xs mt-2">SOAP note will be generated after ending consultation</p>
-              </div>
-            ) : (
-              <div className="space-y-4 pr-4">
-                <div className="border-l-4 border-primary pl-4 py-2">
-                  <h4 className="font-semibold text-foreground mb-2">Subjective</h4>
-                  <p className="text-sm text-foreground">{soapNote.subjective}</p>
-                </div>
-                
-                <div className="border-l-4 border-accent pl-4 py-2">
-                  <h4 className="font-semibold text-foreground mb-2">Objective</h4>
-                  <p className="text-sm text-foreground">{soapNote.objective}</p>
-                </div>
-                
-                <div className="border-l-4 border-primary pl-4 py-2">
-                  <h4 className="font-semibold text-foreground mb-2">Assessment</h4>
-                  <p className="text-sm text-foreground whitespace-pre-line">{soapNote.assessment}</p>
-                </div>
-                
-                <div className="border-l-4 border-accent pl-4 py-2">
-                  <h4 className="font-semibold text-foreground mb-2">Plan</h4>
-                  <p className="text-sm text-foreground whitespace-pre-line">{soapNote.plan}</p>
-                </div>
-              </div>
-            )}
-          </ScrollArea>
-        </Card>
-
-        {/* AI Detected Tasks */}
-        <Card className="p-6 h-[500px] flex flex-col">
-          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-primary" />
-            AI-Detected Tasks
-            <Badge variant="secondary" className="ml-2">{detectedTasks.length}</Badge>
-          </h3>
           
           <ScrollArea className="flex-1">
             <div className="space-y-3 pr-4">
@@ -230,7 +229,144 @@ const PatientConsultation = () => {
             </div>
           </ScrollArea>
         </Card>
+
+        {/* Live Transcription - RIGHT SIDE */}
+        <Card className="p-6 h-[600px] flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <Mic className="h-5 w-5 text-primary" />
+              {isRecording ? "Live Transcription" : "Consultation Summary"}
+            </h3>
+            {conversationEnded && (
+              <Button variant="outline" size="sm" className="gap-2">
+                <Save className="h-4 w-4" />
+                Save Note
+              </Button>
+            )}
+          </div>
+          
+          <ScrollArea className="flex-1">
+            {isRecording ? (
+              <div className="space-y-3 pr-4">
+                <div className="flex items-start gap-3">
+                  <Badge variant="secondary" className="mt-1">Patient</Badge>
+                  <p className="text-sm text-foreground flex-1">
+                    I've been having chest pain for the past few days...
+                  </p>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <Badge variant="default" className="mt-1">Doctor</Badge>
+                  <p className="text-sm text-foreground flex-1">
+                    Can you describe the pain? Is it sharp or dull?
+                  </p>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <Badge variant="secondary" className="mt-1">Patient</Badge>
+                  <p className="text-sm text-foreground flex-1">
+                    It's more of a dull ache, especially when I climb stairs.
+                  </p>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <Badge variant="default" className="mt-1">Doctor</Badge>
+                  <p className="text-sm text-foreground flex-1">
+                    Any shortness of breath with it?
+                  </p>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <Badge variant="secondary" className="mt-1">Patient</Badge>
+                  <p className="text-sm text-foreground flex-1">
+                    Yes, I get a bit winded...
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 text-muted-foreground mt-4 pt-4 border-t">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                  </div>
+                  <p className="text-xs">Listening...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 pr-4">
+                <div className="border-l-4 border-primary pl-4 py-2">
+                  <h4 className="font-semibold text-foreground mb-2">Subjective</h4>
+                  <p className="text-sm text-foreground">{soapNote.subjective}</p>
+                </div>
+                
+                <div className="border-l-4 border-accent pl-4 py-2">
+                  <h4 className="font-semibold text-foreground mb-2">Objective</h4>
+                  <p className="text-sm text-foreground">{soapNote.objective}</p>
+                </div>
+                
+                <div className="border-l-4 border-primary pl-4 py-2">
+                  <h4 className="font-semibold text-foreground mb-2">Assessment</h4>
+                  <p className="text-sm text-foreground whitespace-pre-line">{soapNote.assessment}</p>
+                </div>
+                
+                <div className="border-l-4 border-accent pl-4 py-2">
+                  <h4 className="font-semibold text-foreground mb-2">Plan</h4>
+                  <p className="text-sm text-foreground whitespace-pre-line">{soapNote.plan}</p>
+                </div>
+              </div>
+            )}
+          </ScrollArea>
+        </Card>
       </div>
+
+      {/* Add Task Dialog */}
+      <Dialog open={isAddingTask} onOpenChange={setIsAddingTask}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Task</DialogTitle>
+            <DialogDescription>
+              Manually add a task to the consultation workflow
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="task-type">Task Type</Label>
+              <Select value={newTaskType} onValueChange={(value) => setNewTaskType(value as DetectedTask["type"])}>
+                <SelectTrigger id="task-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Lab Order">Lab Order</SelectItem>
+                  <SelectItem value="Prescription">Prescription</SelectItem>
+                  <SelectItem value="Referral">Referral</SelectItem>
+                  <SelectItem value="Follow-up">Follow-up</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="task-description">Description</Label>
+              <Textarea
+                id="task-description"
+                placeholder="Enter task details..."
+                value={newTaskDescription}
+                onChange={(e) => setNewTaskDescription(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddingTask(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddTask}>
+              Add Task
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Task Review Modal */}
       {selectedTask && (
