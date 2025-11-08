@@ -1,6 +1,6 @@
 import { Activity, LayoutDashboard, FileText, ClipboardList, Users, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import ProfileButton from "./ProfileButton";
 
 type View = "overview" | "consultation" | "notes" | "tasks" | "patients";
 
@@ -49,24 +49,7 @@ const AppNavigation = ({ currentView, onViewChange }: AppNavigationProps) => {
           </div>
           
           {/* User Section */}
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon">
-              <Settings className="h-5 w-5" />
-            </Button>
-            <div className="flex items-center gap-3 pl-3 border-l border-border">
-              <div className="hidden md:block text-right">
-                <p className="text-sm font-medium text-foreground">Dr. Sarah Mitchell</p>
-                <p className="text-xs text-muted-foreground">General Practice</p>
-              </div>
-              <Avatar>
-                <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah" alt="Dr. Sarah Mitchell" />
-                <AvatarFallback>SM</AvatarFallback>
-              </Avatar>
-            </div>
-            <Button variant="ghost" size="icon">
-              <LogOut className="h-5 w-5" />
-            </Button>
-          </div>
+          <ProfileButton />
         </div>
         
         {/* Mobile Navigation */}

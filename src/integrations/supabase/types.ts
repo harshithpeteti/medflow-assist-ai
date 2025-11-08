@@ -14,7 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      doctor_stats: {
+        Row: {
+          consultations_today: number | null
+          doctor_id: string
+          id: string
+          notes_generated: number | null
+          tasks_completed: number | null
+          total_patients: number | null
+          updated_at: string
+        }
+        Insert: {
+          consultations_today?: number | null
+          doctor_id: string
+          id?: string
+          notes_generated?: number | null
+          tasks_completed?: number | null
+          total_patients?: number | null
+          updated_at?: string
+        }
+        Update: {
+          consultations_today?: number | null
+          doctor_id?: string
+          id?: string
+          notes_generated?: number | null
+          tasks_completed?: number | null
+          total_patients?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doctor_stats_doctor_id_fkey"
+            columns: ["doctor_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          license_number: string | null
+          phone: string | null
+          specialty: string | null
+          updated_at: string
+          workplace: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+          license_number?: string | null
+          phone?: string | null
+          specialty?: string | null
+          updated_at?: string
+          workplace?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          license_number?: string | null
+          phone?: string | null
+          specialty?: string | null
+          updated_at?: string
+          workplace?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

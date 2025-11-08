@@ -1,15 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import AppNavigation from "@/components/app/AppNavigation";
 import PatientConsultation from "@/components/app/PatientConsultation";
 import ClinicalNotes from "@/components/app/ClinicalNotes";
 import TaskQueue from "@/components/app/TaskQueue";
 import PatientList from "@/components/app/PatientList";
 import DashboardOverview from "@/components/app/DashboardOverview";
+import { useAuth } from "@/hooks/useAuth";
 
 type View = "overview" | "consultation" | "notes" | "tasks" | "patients";
 
 const Dashboard = () => {
   const [currentView, setCurrentView] = useState<View>("overview");
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) {
+      navigate("/auth");
+    }
+  }, [user, navigate]);
 
   const renderView = () => {
     switch (currentView) {
