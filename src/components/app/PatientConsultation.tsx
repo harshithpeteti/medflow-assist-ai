@@ -47,8 +47,8 @@ interface SoapNote {
 }
 
 const PatientConsultation = () => {
-  const [selectedPatient, setSelectedPatient] = useState<number | null>(1);
-  const [patientSearch, setPatientSearch] = useState("");
+  const [patientName, setPatientName] = useState("");
+  const [currentPatient, setCurrentPatient] = useState<any | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [detectedTasks, setDetectedTasks] = useState<DetectedTask[]>([]);
   const [soapNote, setSoapNote] = useState<SoapNote | null>(null);
@@ -69,60 +69,53 @@ const PatientConsultation = () => {
     error: voiceError
   } = useVoiceRecording();
 
-  // Mock patient data
-  const patients = [
-    {
-      id: 1,
-      name: "Emma Wilson",
-      age: 48,
-      mrn: "EMW-2024-1142",
-      lastVisit: "Dec 20, 2024",
-      visitCount: 3,
-      conditions: ["Hypertension", "Type 2 Diabetes"],
-    },
-    {
-      id: 2,
-      name: "John Davis",
-      age: 62,
-      mrn: "JDA-2023-0892",
-      lastVisit: "Jan 10, 2025",
-      visitCount: 8,
-      conditions: ["Hypertension"],
-    },
-    {
-      id: 3,
-      name: "Sarah Johnson",
-      age: 35,
-      mrn: "SJO-2024-0234",
-      lastVisit: "Never",
-      visitCount: 0,
-      conditions: [],
-    },
-  ];
+  const handleStartConsultation = () => {
+    if (!patientName.trim()) {
+      toast.error("Please enter patient name");
+      return;
+    }
 
-  const currentPatient = patients.find(p => p.id === selectedPatient);
+    // Check if patient exists in localStorage
+    const storedNotes = JSON.parse(localStorage.getItem("clinicalNotes") || "[]");
+    const existingPatient = storedNotes.find(
+      (note: any) => note.patientName.toLowerCase() === patientName.trim().toLowerCase()
+    );
+
+    if (existingPatient) {
+      // Return visit - load patient data
+      const patientVisits = storedNotes.filter(
+        (note: any) => note.patientName.toLowerCase() === patientName.trim().toLowerCase()
+      );
+      
+      setCurrentPatient({
+        name: patientName.trim(),
+        mrn: existingPatient.patientMRN,
+        visitCount: patientVisits.length,
+        lastVisit: new Date(patientVisits[patientVisits.length - 1].timestamp).toLocaleDateString(),
+      });
+      setIsReturnVisit(true);
+      setPreviousVisits(patientVisits);
+      toast.success(`Welcome back ${patientName}! (${patientVisits.length} previous visits)`);
+    } else {
+      // New patient
+      const newMRN = `${patientName.substring(0, 3).toUpperCase()}-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+      setCurrentPatient({
+        name: patientName.trim(),
+        mrn: newMRN,
+        visitCount: 0,
+        lastVisit: "Never",
+      });
+      setIsReturnVisit(false);
+      setPreviousVisits([]);
+      toast.success(`New patient created: ${patientName}`);
+    }
+  };
 
   useEffect(() => {
     if (voiceError) {
       toast.error(voiceError);
     }
   }, [voiceError]);
-
-  // Set return visit status and load previous visits when patient is selected
-  useEffect(() => {
-    if (currentPatient && currentPatient.visitCount > 0) {
-      setIsReturnVisit(true);
-      // Load previous visits from localStorage
-      const storedNotes = JSON.parse(localStorage.getItem("clinicalNotes") || "[]");
-      const patientVisits = storedNotes.filter(
-        (note: any) => note.patientName === currentPatient.name
-      );
-      setPreviousVisits(patientVisits);
-    } else {
-      setIsReturnVisit(false);
-      setPreviousVisits([]);
-    }
-  }, [currentPatient]);
 
   // Auto-detect tasks every 30 seconds
   useEffect(() => {
@@ -194,8 +187,8 @@ const PatientConsultation = () => {
 
 
   const handleStartRecording = async () => {
-    if (!selectedPatient) {
-      toast.error("Please select a patient first");
+    if (!currentPatient) {
+      toast.error("Please start a consultation first");
       return;
     }
     setIsRecording(true);
@@ -282,147 +275,107 @@ const PatientConsultation = () => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-88px)] gap-4 animate-fade-in">
-      {/* Left Sidebar - Patient List */}
-      <Card className="w-80 flex flex-col">
-        <div className="p-4 border-b border-border space-y-4">
-          <h2 className="text-lg font-semibold text-foreground">Patients</h2>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search patients..."
-              value={patientSearch}
-              onChange={(e) => setPatientSearch(e.target.value)}
-              className="pl-10 h-9"
-            />
-          </div>
-        </div>
-        
-        <ScrollArea className="flex-1">
-          <div className="divide-y divide-border">
-            {patients.map((patient) => (
-              <div
-                key={patient.id}
-                onClick={() => setSelectedPatient(patient.id)}
-                className={`p-4 cursor-pointer transition-all hover:bg-muted/50 ${
-                  selectedPatient === patient.id ? "bg-muted border-l-4 border-l-primary" : ""
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
-                    <User className="h-5 w-5 text-primary-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm text-foreground truncate">{patient.name}</h3>
-                    <p className="text-xs text-muted-foreground">{patient.age} yrs • {patient.mrn}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      {patient.visitCount > 0 ? (
-                        <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/20 gap-1">
-                          <RefreshCw className="h-3 w-3" />
-                          Return Visit
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/20">
-                          New Patient
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-      </Card>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col space-y-4 overflow-hidden">
-        {/* Patient Header */}
-        {currentPatient && (
-          <Card className="p-6">
-            <div className="flex items-start justify-between gap-6">
-              <div className="flex items-start gap-4 flex-1">
-                <div className="w-14 h-14 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
-                  <User className="h-7 w-7 text-primary-foreground" />
-                </div>
-                
-                <div className="flex-1 space-y-3">
-                  <div>
-                    <h2 className="text-2xl font-bold text-foreground mb-2">{currentPatient.name}</h2>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span className="font-medium">{currentPatient.age} years old</span>
-                      <Separator orientation="vertical" className="h-4" />
-                      <span>MRN: {currentPatient.mrn}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {isReturnVisit ? (
-                      <>
-                        <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
-                          <RefreshCw className="h-3 w-3 mr-1" />
-                          Return Visit ({currentPatient.visitCount} total)
-                        </Badge>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowPreviousVisits(true)}
-                          className="gap-2 h-7 text-xs"
-                        >
-                          <History className="h-3 w-3" />
-                          View Previous Visits
-                        </Button>
-                      </>
-                    ) : (
-                      <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
-                        New Patient
-                      </Badge>
-                    )}
-                  </div>
-
-                  {currentPatient.conditions.length > 0 && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-2">Medical History:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {currentPatient.conditions.map((condition, idx) => (
-                          <Badge key={idx} variant="secondary" className="text-xs">
-                            {condition}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {isReturnVisit && (
-                    <p className="text-xs text-muted-foreground">
-                      Last visit: {currentPatient.lastVisit}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <Button
-                onClick={isRecording ? handleStopRecording : handleStartRecording}
-                variant={isRecording ? "destructive" : "hero"}
+    <div className="flex flex-col h-[calc(100vh-88px)] gap-4 animate-fade-in">
+      {/* Patient Name Entry or Patient Header */}
+      {!currentPatient ? (
+        <Card className="p-6">
+          <div className="max-w-2xl mx-auto space-y-4">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold text-foreground">Start New Consultation</h2>
+              <p className="text-sm text-muted-foreground">
+                Enter patient name to begin. System will detect if this is a return visit.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter patient name..."
+                value={patientName}
+                onChange={(e) => setPatientName(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleStartConsultation()}
+                className="flex-1 text-lg h-12"
+              />
+              <Button 
+                onClick={handleStartConsultation} 
                 size="lg"
-                className="gap-2 flex-shrink-0"
+                className="gap-2"
               >
-                {isRecording ? (
-                  <>
-                    <Square className="h-5 w-5" />
-                    Stop Recording
-                  </>
-                ) : (
-                  <>
-                    <Mic className="h-5 w-5" />
-                    Start Consultation
-                  </>
-                )}
+                <UserPlus className="h-5 w-5" />
+                Start Consultation
               </Button>
             </div>
-          </Card>
-        )}
+          </div>
+        </Card>
+      ) : (
+        <Card className="p-6">
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4 flex-1">
+              <div className="w-14 h-14 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
+                <User className="h-7 w-7 text-primary-foreground" />
+              </div>
+              
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-4">
+                  <h2 className="text-2xl font-bold text-foreground">{currentPatient.name}</h2>
+                  {isReturnVisit ? (
+                    <>
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Return Visit ({currentPatient.visitCount} total)
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowPreviousVisits(true)}
+                        className="gap-2 h-7 text-xs"
+                      >
+                        <History className="h-3 w-3" />
+                        View Previous Visits
+                      </Button>
+                    </>
+                  ) : (
+                    <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                      New Patient
+                    </Badge>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span>MRN: {currentPatient.mrn}</span>
+                  {isReturnVisit && (
+                    <>
+                      <Separator orientation="vertical" className="h-4" />
+                      <span>Last visit: {currentPatient.lastVisit}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
 
+            <Button
+              onClick={isRecording ? handleStopRecording : handleStartRecording}
+              variant={isRecording ? "destructive" : "hero"}
+              size="lg"
+              className="gap-2 flex-shrink-0"
+            >
+              {isRecording ? (
+                <>
+                  <Square className="h-5 w-5" />
+                  Stop Recording
+                </>
+              ) : (
+                <>
+                  <Mic className="h-5 w-5" />
+                  Start Recording
+                </>
+              )}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Main Content - Only show when patient is selected */}
+      {currentPatient && (
+        <div className="flex-1 flex flex-col space-y-4 overflow-hidden">
         {/* Recording & Transcription with Tabs */}
         <Card className="flex-1 flex flex-col overflow-hidden">
           <div className="p-4 border-b border-border">
@@ -610,7 +563,8 @@ const PatientConsultation = () => {
           visits={previousVisits}
           patientName={currentPatient?.name || ""}
         />
-      </div>
+        </div>
+      )}
     </div>
   );
 };
