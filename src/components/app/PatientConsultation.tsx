@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import PreviousVisitsModal from "./PreviousVisitsModal";
 import MedicalNotesPreviewModal from "./MedicalNotesPreviewModal";
+import { DustWorkflowIndicator } from "./DustWorkflowIndicator";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useVoiceRecording } from "@/hooks/useVoiceRecording";
@@ -60,6 +61,7 @@ const PatientConsultation = () => {
   const [showMedicalNotesPreview, setShowMedicalNotesPreview] = useState(false);
   const [generatedSOAP, setGeneratedSOAP] = useState<any>(null);
   const [selectedLanguage, setSelectedLanguage] = useState("auto");
+  const [dustWorkflowStatus, setDustWorkflowStatus] = useState<'processing' | 'optimized' | 'error' | 'idle'>('idle');
   
   // Speaker identification
   const [currentSpeaker, setCurrentSpeaker] = useState<"doctor" | "patient">("doctor");
@@ -174,6 +176,7 @@ const PatientConsultation = () => {
 
     setIsDetectingTasks(true);
     try {
+      // Step 1: Detect tasks using AI
       const { data, error } = await supabase.functions.invoke(
         "detect-medical-tasks",
         { body: { transcription: text } }
@@ -182,14 +185,23 @@ const PatientConsultation = () => {
       if (error) throw error;
       
       if (data?.tasks && Array.isArray(data.tasks)) {
+        // Step 2: Optimize tasks with Dust workflow
+        console.log("Optimizing tasks with Dust workflow...");
+        const dustResult = await optimizeTasksWithDust(data.tasks);
+        
+        const optimizedTasks = dustResult.success ? dustResult.tasks : data.tasks;
+        
         setDetectedTasks(prev => {
           const existingIds = new Set(prev.map(t => t.id));
-          const newTasks = data.tasks.filter((t: DetectedTask) => !existingIds.has(t.id));
+          const newTasks = optimizedTasks.filter((t: DetectedTask) => !existingIds.has(t.id));
           return [...prev, ...newTasks];
         });
         
-        if (data.tasks.length > 0) {
-          toast.success(`Detected ${data.tasks.length} task(s) from consultation`);
+        if (optimizedTasks.length > 0) {
+          const message = dustResult.success 
+            ? `Detected and optimized ${optimizedTasks.length} task(s) with Dust AI`
+            : `Detected ${optimizedTasks.length} task(s) from consultation`;
+          toast.success(message);
         }
       }
     } catch (error: any) {
@@ -197,6 +209,63 @@ const PatientConsultation = () => {
       toast.error("Failed to detect tasks");
     } finally {
       setIsDetectingTasks(false);
+    }
+  };
+
+  const optimizeTasksWithDust = async (tasks: DetectedTask[]) => {
+    setDustWorkflowStatus('processing');
+    try {
+      const { data, error } = await supabase.functions.invoke('dust-workflow', {
+        body: {
+          workflowType: 'optimize-tasks',
+          payload: {
+            tasks: tasks.map(t => ({
+              type: t.type,
+              description: t.description,
+              reason: t.reason,
+              urgency: t.urgency,
+              details: t.details
+            })),
+            patientContext: {
+              name: currentPatient?.name,
+              isReturnVisit: isReturnVisit,
+              previousVisits: previousVisits.length
+            }
+          }
+        }
+      });
+
+      if (error) {
+        console.error("Dust optimization error:", error);
+        setDustWorkflowStatus('error');
+        return { success: false, tasks };
+      }
+
+      // Parse Dust response and enhance tasks
+      const dustTasks = data?.result?.run?.results?.[0]?.[0]?.value || tasks;
+      
+      // Merge Dust optimizations with original tasks
+      const optimized = tasks.map((task, idx) => {
+        const dustEnhancement = dustTasks[idx] || {};
+        return {
+          ...task,
+          priority: dustEnhancement.priority || task.urgency,
+          reasoning: dustEnhancement.reasoning,
+          estimatedTime: dustEnhancement.estimatedTime,
+          dependencies: dustEnhancement.dependencies || [],
+          recommendedAction: dustEnhancement.recommendedAction
+        };
+      });
+
+      setDustWorkflowStatus('optimized');
+      setTimeout(() => setDustWorkflowStatus('idle'), 3000);
+      
+      return { success: true, tasks: optimized };
+    } catch (error) {
+      console.error("Error in Dust optimization:", error);
+      setDustWorkflowStatus('error');
+      setTimeout(() => setDustWorkflowStatus('idle'), 3000);
+      return { success: false, tasks };
     }
   };
 
@@ -265,20 +334,93 @@ const PatientConsultation = () => {
     toast.info("Task removed");
   };
 
-  const approveTask = (taskId: string) => {
+  const approveTask = async (taskId: string) => {
+    const taskToApprove = detectedTasks.find(t => t.id === taskId);
+    
     if (expandedTaskId === taskId && editableTask) {
-      // Save edited task
+      // Validate prescription tasks with Dust before approval
+      if (editableTask.type === "Prescription") {
+        toast.info("Validating prescription with Dust AI...");
+        
+        try {
+          const { data } = await supabase.functions.invoke('dust-workflow', {
+            body: {
+              workflowType: 'validate-prescription',
+              payload: {
+                prescription: editableTask,
+                currentMedications: [],
+                allergies: []
+              }
+            }
+          });
+
+          if (data?.result?.validation?.hasIssues) {
+            toast.error(`Validation issues: ${data.result.validation.issues.join(', ')}`);
+            return;
+          }
+        } catch (error) {
+          console.error("Prescription validation error:", error);
+        }
+      }
+
+      // Route task with Dust
+      const routingResult = await routeTaskWithDust(editableTask);
+      
       setDetectedTasks(prev =>
-        prev.map(t => t.id === taskId ? { ...editableTask, status: "reviewed" as const } : t)
+        prev.map(t => t.id === taskId ? { 
+          ...editableTask, 
+          status: "reviewed" as const,
+          routedTo: routingResult.department,
+          assignedTo: routingResult.specialist
+        } : t)
       );
       setExpandedTaskId(null);
       setEditableTask(null);
-      toast.success("Task updated and approved");
+      toast.success(`Task approved and routed to ${routingResult.department}`);
     } else {
-      setDetectedTasks(prev =>
-        prev.map(t => t.id === taskId ? { ...t, status: "reviewed" as const } : t)
-      );
-      toast.success("Task approved and sent");
+      if (taskToApprove) {
+        const routingResult = await routeTaskWithDust(taskToApprove);
+        setDetectedTasks(prev =>
+          prev.map(t => t.id === taskId ? { 
+            ...t, 
+            status: "reviewed" as const,
+            routedTo: routingResult.department,
+            assignedTo: routingResult.specialist
+          } : t)
+        );
+        toast.success(`Task approved and routed to ${routingResult.department}`);
+      } else {
+        setDetectedTasks(prev =>
+          prev.map(t => t.id === taskId ? { ...t, status: "reviewed" as const } : t)
+        );
+        toast.success("Task approved");
+      }
+    }
+  };
+
+  const routeTaskWithDust = async (task: DetectedTask) => {
+    try {
+      const { data } = await supabase.functions.invoke('dust-workflow', {
+        body: {
+          workflowType: 'task-routing',
+          payload: {
+            task,
+            patientContext: {
+              name: currentPatient?.name,
+              isReturnVisit: isReturnVisit
+            }
+          }
+        }
+      });
+
+      return {
+        department: data?.result?.routing?.department || 'General',
+        specialist: data?.result?.routing?.specialist || 'Unassigned',
+        priority: data?.result?.routing?.priority || task.urgency
+      };
+    } catch (error) {
+      console.error("Error routing task:", error);
+      return { department: 'General', specialist: 'Unassigned', priority: task.urgency };
     }
   };
 
@@ -476,9 +618,10 @@ const PatientConsultation = () => {
             <Card className="flex-1 flex flex-col overflow-hidden">
               <div className="p-4 border-b flex-shrink-0">
                 <div className="flex items-center justify-between mb-4">
-                  <div>
+                  <div className="space-y-1">
                     <h3 className="text-lg font-semibold text-foreground">Detected Tasks</h3>
                     <p className="text-xs text-muted-foreground">Review and approve tasks from consultation</p>
+                    <DustWorkflowIndicator status={dustWorkflowStatus} />
                   </div>
                   {isDetectingTasks && (
                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
