@@ -87,16 +87,48 @@ const PatientConsultation = () => {
   // Track when transcript changes to add to conversation
   const lastTranscriptLength = useRef(0);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const lastSpeaker = useRef<"Doctor" | "Patient">("Doctor");
   
   useEffect(() => {
     if (transcript.length > lastTranscriptLength.current && isRecording) {
       const newText = transcript.substring(lastTranscriptLength.current);
       if (newText.trim()) {
-        setConversationTranscript(prev => [...prev, {
-          speaker: currentSpeaker,
-          text: newText,
-          timestamp: Date.now()
-        }]);
+        // Check if speaker changed
+        if (lastSpeaker.current !== currentSpeaker) {
+          // Speaker changed, create new entry
+          setConversationTranscript(prev => [...prev, {
+            speaker: currentSpeaker,
+            text: newText,
+            timestamp: Date.now()
+          }]);
+          lastSpeaker.current = currentSpeaker;
+        } else {
+          // Same speaker, append to last entry
+          setConversationTranscript(prev => {
+            if (prev.length === 0) {
+              return [{
+                speaker: currentSpeaker,
+                text: newText,
+                timestamp: Date.now()
+              }];
+            }
+            const updated = [...prev];
+            const lastEntry = updated[updated.length - 1];
+            if (lastEntry.speaker === currentSpeaker) {
+              updated[updated.length - 1] = {
+                ...lastEntry,
+                text: lastEntry.text + " " + newText
+              };
+            } else {
+              updated.push({
+                speaker: currentSpeaker,
+                text: newText,
+                timestamp: Date.now()
+              });
+            }
+            return updated;
+          });
+        }
         lastTranscriptLength.current = transcript.length;
       }
     }
@@ -237,8 +269,9 @@ const PatientConsultation = () => {
     setIsRecording(true);
     setConversationTranscript([]);
     lastTranscriptLength.current = 0;
+    lastSpeaker.current = currentSpeaker;
     await startVoiceRecording();
-    toast.success("Recording started");
+    toast.success("Recording started - Toggle speaker as conversation switches");
   };
   
   const saveDraft = () => {
@@ -542,16 +575,19 @@ const PatientConsultation = () => {
 
             <TabsContent value="transcript" className="flex-1 p-4 overflow-hidden">
               {isListening && (
-                <div className="flex items-center justify-between gap-2 text-sm bg-muted/50 p-3 rounded-lg mb-4">
+                <div className="flex items-center justify-between gap-2 text-sm bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/20 p-3 rounded-lg mb-4">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-muted-foreground">Recording in progress...</span>
+                    <span className="font-medium text-foreground">🎙️ Recording - Click speaker to switch</span>
                   </div>
                   <div className="flex gap-2">
                     <Button
                       variant={currentSpeaker === "Doctor" ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setCurrentSpeaker("Doctor")}
+                      onClick={() => {
+                        setCurrentSpeaker("Doctor");
+                        toast.info("Now recording: Doctor");
+                      }}
                       className="h-7 gap-1"
                     >
                       <Stethoscope className="h-3 w-3" />
@@ -560,7 +596,10 @@ const PatientConsultation = () => {
                     <Button
                       variant={currentSpeaker === "Patient" ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setCurrentSpeaker("Patient")}
+                      onClick={() => {
+                        setCurrentSpeaker("Patient");
+                        toast.info("Now recording: Patient");
+                      }}
                       className="h-7 gap-1"
                     >
                       <User className="h-3 w-3" />
@@ -614,16 +653,31 @@ const PatientConsultation = () => {
               <ScrollArea className="h-full">
                 {recommendedQuestions.length > 0 ? (
                   <div className="space-y-3">
+                    <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <p className="text-xs text-blue-600 font-medium">
+                        💡 AI-Generated Follow-up Questions ({recommendedQuestions.length})
+                      </p>
+                    </div>
                     {recommendedQuestions.map((question, idx) => (
-                      <Card key={idx} className="p-4 hover:bg-muted/50 transition-colors cursor-pointer">
-                        <p className="text-sm text-foreground">{question}</p>
+                      <Card key={idx} className="p-4 hover:bg-accent/50 transition-all cursor-pointer border-l-4 border-l-primary/50">
+                        <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-xs font-bold text-primary">{idx + 1}</span>
+                          </div>
+                          <p className="text-sm text-foreground leading-relaxed">{question}</p>
+                        </div>
                       </Card>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground italic">
-                    Recommended questions will appear here after consultation starts...
-                  </p>
+                  <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                    <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+                      <Activity className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <p className="text-muted-foreground italic">
+                      Recommended questions will appear here after you stop recording...
+                    </p>
+                  </div>
                 )}
               </ScrollArea>
             </TabsContent>
