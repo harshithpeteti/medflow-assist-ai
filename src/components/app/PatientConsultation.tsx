@@ -37,7 +37,7 @@ interface DetectedTask {
 }
 
 const PatientConsultation = () => {
-  const [isRecording, setIsRecording] = useState(true);
+  const [isRecording, setIsRecording] = useState(false);
   const [selectedTask, setSelectedTask] = useState<DetectedTask | null>(null);
   const [conversationEnded, setConversationEnded] = useState(false);
   const [isAddingTask, setIsAddingTask] = useState(false);
@@ -45,6 +45,14 @@ const PatientConsultation = () => {
   const [newTaskDescription, setNewTaskDescription] = useState("");
   const [liveTranscript, setLiveTranscript] = useState("Patient: I've been having chest pain for the past few days...\n\nDoctor: Can you describe the pain? Is it sharp or dull?\n\nPatient: It's more of a dull ache, especially when I climb stairs.\n\nDoctor: Any shortness of breath with it?\n\nPatient: Yes, I get a bit winded...");
   const { toast } = useToast();
+
+  const handleStartRecording = () => {
+    setIsRecording(true);
+    toast({
+      title: "Recording Started",
+      description: "Listening to consultation...",
+    });
+  };
 
   const soapNote = {
     subjective: "Patient reports chest discomfort and shortness of breath for the past three days. Symptoms worsen with exertion, particularly when climbing stairs. No associated fever or cough reported.",
@@ -144,30 +152,45 @@ const PatientConsultation = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Badge variant={isRecording ? "default" : "secondary"} className="px-4 py-2">
-              {isRecording && (
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2" />
-              )}
-              {isRecording ? "Recording" : "Ended"}
-            </Badge>
-            {isRecording && (
+            {!isRecording && !conversationEnded && (
               <Button 
-                onClick={handleEndConsultation}
-                variant="destructive"
-                className="gap-2"
+                onClick={handleStartRecording}
                 size="lg"
+                className="gap-2"
               >
-                <MicOff className="h-5 w-5" />
-                End Consultation
+                <Mic className="h-5 w-5" />
+                Start Recording
               </Button>
+            )}
+            {isRecording && (
+              <>
+                <Badge variant="default" className="px-4 py-2">
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2" />
+                  Recording
+                </Badge>
+                <Button 
+                  onClick={handleEndConsultation}
+                  variant="destructive"
+                  className="gap-2"
+                  size="lg"
+                >
+                  <MicOff className="h-5 w-5" />
+                  End Consultation
+                </Button>
+              </>
+            )}
+            {conversationEnded && (
+              <Badge variant="secondary" className="px-4 py-2">
+                Ended
+              </Badge>
             )}
           </div>
         </div>
       </Card>
 
       {/* Main Content Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* AI Detected Tasks - LEFT SIDE */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* AI Detected Tasks - LEFT SIDE (1/3) */}
         <Card className="p-6 h-[600px] flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -183,7 +206,7 @@ const PatientConsultation = () => {
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
-              Add Task
+              Add
             </Button>
           </div>
           
@@ -210,17 +233,16 @@ const PatientConsultation = () => {
                       </div>
                       
                       <div>
-                        <h4 className="font-semibold text-foreground mb-1">{task.type}</h4>
-                        <p className="text-sm text-foreground mb-2">{task.description}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{task.reason}</p>
+                        <h4 className="font-semibold text-foreground mb-1 text-sm">{task.type}</h4>
+                        <p className="text-xs text-foreground mb-2 line-clamp-2">{task.description}</p>
                       </div>
                       
                       <Button 
                         size="sm" 
                         variant="outline" 
-                        className="w-full group-hover:bg-primary group-hover:text-primary-foreground"
+                        className="w-full group-hover:bg-primary group-hover:text-primary-foreground text-xs"
                       >
-                        Review & Accept
+                        Review
                       </Button>
                     </div>
                   </Card>
@@ -230,12 +252,12 @@ const PatientConsultation = () => {
           </ScrollArea>
         </Card>
 
-        {/* Live Transcription - RIGHT SIDE */}
-        <Card className="p-6 h-[600px] flex flex-col">
+        {/* Live Transcription - RIGHT SIDE (2/3) */}
+        <Card className="p-6 h-[600px] flex flex-col lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <Mic className="h-5 w-5 text-primary" />
-              {isRecording ? "Live Transcription" : "Consultation Summary"}
+              {!isRecording && !conversationEnded ? "Consultation Transcription" : isRecording ? "Live Transcription" : "Consultation Summary"}
             </h3>
             {conversationEnded && (
               <Button variant="outline" size="sm" className="gap-2">
@@ -246,7 +268,17 @@ const PatientConsultation = () => {
           </div>
           
           <ScrollArea className="flex-1">
-            {isRecording ? (
+            {!isRecording && !conversationEnded ? (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <Mic className="h-10 w-10 text-primary" />
+                </div>
+                <p className="text-lg font-medium mb-2">Ready to Start</p>
+                <p className="text-sm text-center max-w-md">
+                  Click the "Start Recording" button above to begin the consultation transcription
+                </p>
+              </div>
+            ) : isRecording ? (
               <div className="space-y-3 pr-4">
                 <div className="flex items-start gap-3">
                   <Badge variant="secondary" className="mt-1">Patient</Badge>
