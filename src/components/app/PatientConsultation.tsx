@@ -17,8 +17,12 @@ import {
   Beaker,
   Pill,
   UserPlus,
-  Activity
+  Activity,
+  Plus,
+  X,
+  CheckCircle
 } from "lucide-react";
+import SOAPReviewModal from "./SOAPReviewModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useVoiceRecording } from "@/hooks/useVoiceRecording";
@@ -50,6 +54,9 @@ const PatientConsultation = () => {
   const [isGeneratingSOAP, setIsGeneratingSOAP] = useState(false);
   const [isReturnVisit, setIsReturnVisit] = useState(false);
   const [recommendedQuestions, setRecommendedQuestions] = useState<string[]>([]);
+  const [showSOAPReview, setShowSOAPReview] = useState(false);
+  const [newTaskDescription, setNewTaskDescription] = useState("");
+  const [newTaskType, setNewTaskType] = useState<DetectedTask["type"]>("Lab Order");
 
   const { 
     transcript,
@@ -188,9 +195,60 @@ const PatientConsultation = () => {
     await stopVoiceRecording();
     toast.success("Recording stopped");
     
-    // Generate SOAP note and recommended questions after recording stops
-    await generateSOAPNote();
+    // Generate SOAP note and show review modal
+    setIsGeneratingSOAP(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-soap-note", {
+        body: { transcription: transcript },
+      });
+
+      if (error) throw error;
+
+      if (data?.soapNote) {
+        setSoapNote(data.soapNote);
+        setShowSOAPReview(true);
+      }
+    } catch (error: any) {
+      console.error("Error generating SOAP note:", error);
+      toast.error(error.message || "Failed to generate SOAP note");
+    } finally {
+      setIsGeneratingSOAP(false);
+    }
+    
     await generateRecommendedQuestions();
+  };
+
+  const addManualTask = () => {
+    if (!newTaskDescription.trim()) {
+      toast.error("Please enter task description");
+      return;
+    }
+
+    const newTask: DetectedTask = {
+      id: Date.now().toString(),
+      type: newTaskType,
+      description: newTaskDescription,
+      reason: "Manually added by doctor",
+      details: {},
+      status: "pending",
+      timestamp: new Date().toISOString(),
+    };
+
+    setDetectedTasks(prev => [newTask, ...prev]);
+    setNewTaskDescription("");
+    toast.success("Task added");
+  };
+
+  const removeTask = (taskId: string) => {
+    setDetectedTasks(prev => prev.filter(t => t.id !== taskId));
+    toast.info("Task removed");
+  };
+
+  const markTaskComplete = (taskId: string) => {
+    setDetectedTasks(prev =>
+      prev.map(t => t.id === taskId ? { ...t, status: "reviewed" as const } : t)
+    );
+    toast.success("Task marked as complete");
   };
 
   const generateRecommendedQuestions = async () => {
@@ -371,90 +429,134 @@ const PatientConsultation = () => {
           </Tabs>
         </Card>
 
-        {/* SOAP Note */}
+        {/* Tasks Section */}
         <Card className="flex-1 flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">SOAP Note</h2>
-            {isGeneratingSOAP && (
-              <Badge variant="secondary" className="gap-2">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Generating...
-              </Badge>
-            )}
+          <div className="p-4 border-b border-border">
+            <h2 className="text-xl font-semibold text-foreground">Consultation Tasks</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Tasks detected from transcription + manually added
+            </p>
           </div>
 
-          <ScrollArea className="flex-1 p-6">
-            {soapNote ? (
-              <div className="space-y-6">
-                {/* Subjective */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-1 h-8 bg-gradient-primary rounded-full" />
-                    <div>
-                      <h3 className="text-lg font-bold text-foreground">Subjective</h3>
-                      <p className="text-xs text-muted-foreground">Patient's reported symptoms and history</p>
-                    </div>
-                  </div>
-                  <Card className="p-4 bg-muted/30 border-l-4 border-l-primary">
-                    <p className="text-foreground whitespace-pre-wrap leading-relaxed">{soapNote.subjective}</p>
-                  </Card>
-                </div>
+          {/* Add Manual Task */}
+          <div className="p-4 border-b border-border bg-muted/30">
+            <div className="flex gap-2">
+              <select
+                value={newTaskType}
+                onChange={(e) => setNewTaskType(e.target.value as DetectedTask["type"])}
+                className="px-3 py-2 bg-background border border-border rounded-md text-sm"
+              >
+                <option value="Lab Order">Lab Order</option>
+                <option value="Prescription">Prescription</option>
+                <option value="Referral">Referral</option>
+                <option value="Follow-up">Follow-up</option>
+              </select>
+              <Input
+                placeholder="Add task description..."
+                value={newTaskDescription}
+                onChange={(e) => setNewTaskDescription(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && addManualTask()}
+                className="flex-1"
+              />
+              <Button onClick={addManualTask} size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add
+              </Button>
+            </div>
+          </div>
 
-                <Separator className="my-4" />
+          <ScrollArea className="flex-1 p-4">
+            {detectedTasks.length > 0 ? (
+              <div className="space-y-3">
+                {detectedTasks.map((task) => {
+                  const icons = {
+                    "Lab Order": Beaker,
+                    "Prescription": Pill,
+                    "Referral": UserPlus,
+                    "Follow-up": Activity,
+                  };
+                  const Icon = icons[task.type];
 
-                {/* Objective */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-1 h-8 bg-accent rounded-full" />
-                    <div>
-                      <h3 className="text-lg font-bold text-foreground">Objective</h3>
-                      <p className="text-xs text-muted-foreground">Clinical findings and measurements</p>
-                    </div>
-                  </div>
-                  <Card className="p-4 bg-muted/30 border-l-4 border-l-accent">
-                    <p className="text-foreground whitespace-pre-wrap leading-relaxed">{soapNote.objective}</p>
-                  </Card>
-                </div>
-
-                <Separator className="my-4" />
-
-                {/* Assessment */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-1 h-8 bg-gradient-primary rounded-full" />
-                    <div>
-                      <h3 className="text-lg font-bold text-foreground">Assessment</h3>
-                      <p className="text-xs text-muted-foreground">Clinical diagnosis and evaluation</p>
-                    </div>
-                  </div>
-                  <Card className="p-4 bg-muted/30 border-l-4 border-l-primary">
-                    <p className="text-foreground whitespace-pre-wrap leading-relaxed">{soapNote.assessment}</p>
-                  </Card>
-                </div>
-
-                <Separator className="my-4" />
-
-                {/* Plan */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-1 h-8 bg-accent rounded-full" />
-                    <div>
-                      <h3 className="text-lg font-bold text-foreground">Plan</h3>
-                      <p className="text-xs text-muted-foreground">Treatment plan and follow-up</p>
-                    </div>
-                  </div>
-                  <Card className="p-4 bg-muted/30 border-l-4 border-l-accent">
-                    <p className="text-foreground whitespace-pre-wrap leading-relaxed">{soapNote.plan}</p>
-                  </Card>
-                </div>
+                  return (
+                    <Card
+                      key={task.id}
+                      className={`p-4 ${
+                        task.status === "reviewed"
+                          ? "bg-green-500/10 border-green-500/20"
+                          : "bg-muted/30"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Icon className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="secondary" className="text-xs">
+                                {task.type}
+                              </Badge>
+                              {task.status === "reviewed" && (
+                                <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/20">
+                                  Completed
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-foreground">
+                              {task.description}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {task.reason}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          {task.status !== "reviewed" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => markTaskComplete(task.id)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeTask(task.id)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <X className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-muted-foreground italic">
-                SOAP note will be automatically generated after the consultation ends...
+                No tasks yet. Tasks will be detected automatically from the transcription, or you can add them manually above.
               </p>
             )}
           </ScrollArea>
         </Card>
+
+        {/* SOAP Review Modal */}
+        <SOAPReviewModal
+          open={showSOAPReview}
+          onClose={() => {
+            setShowSOAPReview(false);
+            setSoapNote(null);
+            setDetectedTasks([]);
+            setRecommendedQuestions([]);
+          }}
+          soapNote={soapNote}
+          patientName={currentPatient?.name || ""}
+          patientMRN={currentPatient?.mrn || ""}
+          transcript={transcript}
+        />
       </div>
     </div>
   );
