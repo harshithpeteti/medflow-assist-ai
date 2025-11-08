@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,9 @@ import {
   Plus,
   X,
   CheckCircle,
-  History
+  History,
+  Stethoscope,
+  Save
 } from "lucide-react";
 import SOAPReviewModal from "./SOAPReviewModal";
 import PreviousVisitsModal from "./PreviousVisitsModal";
@@ -65,6 +67,14 @@ const PatientConsultation = () => {
   // AI-extracted medical information
   const [extractedInfo, setExtractedInfo] = useState<any>(null);
   const [isExtractingInfo, setIsExtractingInfo] = useState(false);
+  
+  // Speaker identification
+  const [currentSpeaker, setCurrentSpeaker] = useState<"Doctor" | "Patient">("Doctor");
+  const [conversationTranscript, setConversationTranscript] = useState<Array<{
+    speaker: "Doctor" | "Patient";
+    text: string;
+    timestamp: number;
+  }>>([]);
 
   const { 
     transcript,
@@ -73,6 +83,23 @@ const PatientConsultation = () => {
     stopRecording: stopVoiceRecording,
     error: voiceError
   } = useVoiceRecording();
+  
+  // Track when transcript changes to add to conversation
+  const lastTranscriptLength = useRef(0);
+  
+  useEffect(() => {
+    if (transcript.length > lastTranscriptLength.current && isRecording) {
+      const newText = transcript.substring(lastTranscriptLength.current);
+      if (newText.trim()) {
+        setConversationTranscript(prev => [...prev, {
+          speaker: currentSpeaker,
+          text: newText,
+          timestamp: Date.now()
+        }]);
+        lastTranscriptLength.current = transcript.length;
+      }
+    }
+  }, [transcript, currentSpeaker, isRecording]);
 
   const handleStartConsultation = () => {
     if (!patientName.trim()) {
@@ -200,8 +227,41 @@ const PatientConsultation = () => {
       return;
     }
     setIsRecording(true);
+    setConversationTranscript([]);
+    lastTranscriptLength.current = 0;
     await startVoiceRecording();
     toast.success("Recording started");
+  };
+  
+  const saveDraft = () => {
+    if (!currentPatient || conversationTranscript.length === 0) {
+      toast.error("No consultation data to save");
+      return;
+    }
+    
+    const draft = {
+      id: Date.now().toString(),
+      patientName: currentPatient.name,
+      patientMRN: currentPatient.mrn,
+      date: new Date().toISOString(),
+      status: "draft",
+      conversation: conversationTranscript,
+      transcript,
+      extractedInfo,
+      detectedTasks
+    };
+    
+    const existingDrafts = JSON.parse(localStorage.getItem("consultationDrafts") || "[]");
+    localStorage.setItem("consultationDrafts", JSON.stringify([draft, ...existingDrafts]));
+    
+    toast.success("Draft saved successfully");
+    
+    // Reset consultation
+    setCurrentPatient(null);
+    setPatientName("");
+    setConversationTranscript([]);
+    setExtractedInfo(null);
+    setDetectedTasks([]);
   };
 
   const handleStopRecording = async () => {
@@ -434,6 +494,18 @@ const PatientConsultation = () => {
                     </>
                   )}
                 </Button>
+                
+                {(isRecording || conversationTranscript.length > 0) && (
+                  <Button
+                    onClick={saveDraft}
+                    variant="outline"
+                    size="lg"
+                    className="gap-2"
+                  >
+                    <Save className="h-5 w-5" />
+                    Save Draft
+                  </Button>
+                )}
               </div>
             </Card>
         <Card className="flex-1 flex flex-col overflow-hidden">
@@ -449,18 +521,68 @@ const PatientConsultation = () => {
 
             <TabsContent value="transcript" className="flex-1 p-4 overflow-hidden">
               {isListening && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg mb-4">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  Recording in progress...
+                <div className="flex items-center justify-between gap-2 text-sm bg-muted/50 p-3 rounded-lg mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                    <span className="text-muted-foreground">Recording in progress...</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={currentSpeaker === "Doctor" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentSpeaker("Doctor")}
+                      className="h-7 gap-1"
+                    >
+                      <Stethoscope className="h-3 w-3" />
+                      Doctor
+                    </Button>
+                    <Button
+                      variant={currentSpeaker === "Patient" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentSpeaker("Patient")}
+                      className="h-7 gap-1"
+                    >
+                      <User className="h-3 w-3" />
+                      Patient
+                    </Button>
+                  </div>
                 </div>
               )}
 
               <ScrollArea className="h-full border border-border rounded-lg p-4 bg-background">
-                {transcript ? (
-                  <p className="text-foreground whitespace-pre-wrap">{transcript}</p>
+                {conversationTranscript.length > 0 ? (
+                  <div className="space-y-4">
+                    {conversationTranscript.map((entry, idx) => (
+                      <div key={idx} className={`flex gap-3 ${entry.speaker === "Doctor" ? "justify-start" : "justify-end"}`}>
+                        <div className={`flex gap-2 max-w-[80%] ${entry.speaker === "Patient" ? "flex-row-reverse" : ""}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            entry.speaker === "Doctor" 
+                              ? "bg-blue-500/10 text-blue-500" 
+                              : "bg-green-500/10 text-green-500"
+                          }`}>
+                            {entry.speaker === "Doctor" ? (
+                              <Stethoscope className="h-4 w-4" />
+                            ) : (
+                              <User className="h-4 w-4" />
+                            )}
+                          </div>
+                          <div className={`rounded-lg p-3 ${
+                            entry.speaker === "Doctor"
+                              ? "bg-blue-500/10 border border-blue-500/20"
+                              : "bg-green-500/10 border border-green-500/20"
+                          }`}>
+                            <p className="text-xs font-semibold mb-1 text-muted-foreground">
+                              {entry.speaker}
+                            </p>
+                            <p className="text-sm text-foreground">{entry.text}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <p className="text-muted-foreground italic">
-                    Click "Start Consultation" to begin transcribing...
+                    Click "Start Recording" to begin transcribing the conversation...
                   </p>
                 )}
               </ScrollArea>

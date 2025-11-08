@@ -209,22 +209,22 @@ const ClinicalNotes = () => {
           <ScrollArea className="flex-1 p-6">
             <div className="space-y-6 max-w-4xl">
               {[
-                { title: "Subjective", content: selectedNote.subjective, subtitle: "Patient's reported symptoms and history" },
-                { title: "Objective", content: selectedNote.objective, subtitle: "Clinical findings and measurements" },
-                { title: "Assessment", content: selectedNote.assessment, subtitle: "Clinical diagnosis and evaluation" },
-                { title: "Plan", content: selectedNote.plan, subtitle: "Treatment plan and follow-up" },
+                { title: "Subjective", content: selectedNote.subjective, subtitle: "Patient's reported symptoms and history", icon: "👤" },
+                { title: "Objective", content: selectedNote.objective, subtitle: "Clinical findings and measurements", icon: "🔬" },
+                { title: "Assessment", content: selectedNote.assessment, subtitle: "Clinical diagnosis and evaluation", icon: "🎯" },
+                { title: "Plan", content: selectedNote.plan, subtitle: "Treatment plan and follow-up", icon: "📋" },
               ].map((section, idx) => (
                 <div key={idx} className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-1 h-10 bg-gradient-primary rounded-full" />
-                    <div>
+                    <div className="text-3xl">{section.icon}</div>
+                    <div className="flex-1">
                       <h2 className="text-xl font-bold text-foreground">{section.title}</h2>
                       <p className="text-xs text-muted-foreground">{section.subtitle}</p>
                     </div>
                   </div>
                   
-                  <Card className="p-5 bg-muted/30 border-l-4 border-l-primary">
-                    <div className="text-foreground leading-relaxed space-y-3">
+                  <Card className="p-6 bg-gradient-to-br from-primary/5 via-background to-background border-l-4 border-l-primary">
+                    <div className="text-foreground leading-relaxed space-y-4">
                       {section.content.split('\n').map((line, lineIdx) => {
                         const trimmedLine = line.trim();
                         
@@ -232,16 +232,19 @@ const ClinicalNotes = () => {
                         if (trimmedLine.startsWith('**') && trimmedLine.includes('**')) {
                           const headerText = trimmedLine.replace(/\*\*/g, '');
                           return (
-                            <h4 key={lineIdx} className="font-bold text-foreground text-base mt-2">
-                              {headerText}
-                            </h4>
+                            <div key={lineIdx} className="flex items-center gap-2 mt-3 mb-2">
+                              <div className="w-1.5 h-5 bg-primary rounded-full" />
+                              <h4 className="font-bold text-foreground text-base tracking-tight">
+                                {headerText}
+                              </h4>
+                            </div>
                           );
                         }
                         
                         // Bullet points with •
                         if (trimmedLine.startsWith('•')) {
                           return (
-                            <div key={lineIdx} className="flex gap-3 ml-2">
+                            <div key={lineIdx} className="flex gap-3 ml-4">
                               <span className="text-primary font-bold mt-1 text-lg">•</span>
                               <span className="flex-1 pt-0.5">{trimmedLine.substring(1).trim()}</span>
                             </div>
@@ -251,9 +254,9 @@ const ClinicalNotes = () => {
                         // Sub-items with -
                         if (trimmedLine.startsWith('-')) {
                           return (
-                            <div key={lineIdx} className="flex gap-3 ml-8">
+                            <div key={lineIdx} className="flex gap-3 ml-10">
                               <span className="text-muted-foreground mt-0.5">-</span>
-                              <span className="flex-1 text-sm">{trimmedLine.substring(1).trim()}</span>
+                              <span className="flex-1 text-sm text-muted-foreground">{trimmedLine.substring(1).trim()}</span>
                             </div>
                           );
                         }
@@ -264,7 +267,7 @@ const ClinicalNotes = () => {
                         }
                         
                         // Regular paragraph text
-                        return <p key={lineIdx} className="text-sm">{line}</p>;
+                        return <p key={lineIdx} className="text-sm ml-4">{line}</p>;
                       })}
                     </div>
                   </Card>
