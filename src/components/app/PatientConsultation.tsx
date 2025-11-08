@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { 
@@ -20,9 +21,13 @@ import {
   Check,
   History,
   AlertCircle,
-  Stethoscope
+  Stethoscope,
+  Edit3,
+  Save,
+  FileText
 } from "lucide-react";
 import PreviousVisitsModal from "./PreviousVisitsModal";
+import MedicalNotesPreviewModal from "./MedicalNotesPreviewModal";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useVoiceRecording } from "@/hooks/useVoiceRecording";
@@ -50,6 +55,10 @@ const PatientConsultation = () => {
   const [newTaskType, setNewTaskType] = useState<DetectedTask["type"]>("Lab Order");
   const [showPreviousVisits, setShowPreviousVisits] = useState(false);
   const [previousVisits, setPreviousVisits] = useState<any[]>([]);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [editableTask, setEditableTask] = useState<DetectedTask | null>(null);
+  const [showMedicalNotesPreview, setShowMedicalNotesPreview] = useState(false);
+  const [generatedSOAP, setGeneratedSOAP] = useState<any>(null);
   
   // Speaker identification
   const [currentSpeaker, setCurrentSpeaker] = useState<"Doctor" | "Patient">("Doctor");
@@ -275,10 +284,97 @@ const PatientConsultation = () => {
   };
 
   const approveTask = (taskId: string) => {
-    setDetectedTasks(prev =>
-      prev.map(t => t.id === taskId ? { ...t, status: "reviewed" as const } : t)
-    );
-    toast.success("Task approved and sent");
+    if (expandedTaskId === taskId && editableTask) {
+      // Save edited task
+      setDetectedTasks(prev =>
+        prev.map(t => t.id === taskId ? { ...editableTask, status: "reviewed" as const } : t)
+      );
+      setExpandedTaskId(null);
+      setEditableTask(null);
+      toast.success("Task updated and approved");
+    } else {
+      setDetectedTasks(prev =>
+        prev.map(t => t.id === taskId ? { ...t, status: "reviewed" as const } : t)
+      );
+      toast.success("Task approved and sent");
+    }
+  };
+
+  const toggleTaskExpand = (task: DetectedTask) => {
+    if (expandedTaskId === task.id) {
+      setExpandedTaskId(null);
+      setEditableTask(null);
+    } else {
+      setExpandedTaskId(task.id);
+      setEditableTask({ ...task });
+    }
+  };
+
+  const generateSOAPNote = async () => {
+    if (conversationTranscript.length === 0) {
+      toast.error("No consultation transcript available");
+      return;
+    }
+
+    const fullTranscript = conversationTranscript
+      .map(entry => `${entry.speaker}: ${entry.text}`)
+      .join('\n');
+
+    try {
+      toast.info("Generating SOAP note...");
+      const { data, error } = await supabase.functions.invoke("generate-soap-note-ai", {
+        body: { transcription: fullTranscript }
+      });
+
+      if (error) throw error;
+
+      setGeneratedSOAP(data);
+      setShowMedicalNotesPreview(true);
+    } catch (error: any) {
+      console.error("Error generating SOAP:", error);
+      toast.error("Failed to generate SOAP note");
+    }
+  };
+
+  const saveToMedicalNotes = () => {
+    if (!generatedSOAP || !currentPatient) return;
+
+    const noteToSave = {
+      id: Date.now().toString(),
+      patientName: currentPatient.name,
+      patientMRN: currentPatient.mrn,
+      demographics: currentPatient.demographics,
+      date: new Date().toISOString(),
+      transcript: conversationTranscript
+        .map(entry => `${entry.speaker}: ${entry.text}`)
+        .join('\n'),
+      subjective: generatedSOAP.subjective || "",
+      objective: generatedSOAP.objective || "",
+      assessment: generatedSOAP.assessment || "",
+      plan: generatedSOAP.plan || "",
+    };
+
+    const existingNotes = JSON.parse(localStorage.getItem("clinicalNotes") || "[]");
+    localStorage.setItem("clinicalNotes", JSON.stringify([noteToSave, ...existingNotes]));
+    
+    setShowMedicalNotesPreview(false);
+    toast.success("Saved to Clinical Notes");
+    
+    // Dispatch storage event to refresh ClinicalNotes component
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  const saveDraft = () => {
+    const draftData = {
+      patientName: currentPatient?.name,
+      patientMRN: currentPatient?.mrn,
+      conversationTranscript,
+      detectedTasks,
+      timestamp: new Date().toISOString(),
+    };
+
+    localStorage.setItem("consultationDraft", JSON.stringify(draftData));
+    toast.success("Draft saved");
   };
 
   const getTaskIcon = (type: DetectedTask["type"]) => {
@@ -429,73 +525,142 @@ const PatientConsultation = () => {
                     {detectedTasks.map((task) => {
                       const Icon = getTaskIcon(task.type);
                       const colorClass = getTaskColor(task.type);
+                      const isExpanded = expandedTaskId === task.id;
 
                       return (
                         <Card
                           key={task.id}
-                          className={`p-4 border-l-4 ${
+                          className={`border-l-4 transition-all duration-300 ${
                             task.status === "reviewed"
                               ? "bg-green-500/5 border-l-green-500"
                               : colorClass
-                          }`}
+                          } ${isExpanded ? "scale-105 shadow-lg" : ""}`}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-start gap-3 flex-1">
-                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${colorClass}`}>
-                                <Icon className="h-5 w-5" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                  <Badge variant="secondary" className="text-xs">
-                                    {task.type}
-                                  </Badge>
-                                  {task.urgency && (
-                                    <Badge variant="outline" className={`text-xs ${
-                                      task.urgency === "stat" ? "bg-red-500/10 text-red-500 border-red-500/20" :
-                                      task.urgency === "urgent" ? "bg-orange-500/10 text-orange-500 border-orange-500/20" :
-                                      "bg-blue-500/10 text-blue-500 border-blue-500/20"
-                                    }`}>
-                                      {task.urgency.toUpperCase()}
-                                    </Badge>
-                                  )}
-                                  {task.status === "reviewed" && (
-                                    <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/20">
-                                      ✓ Approved
-                                    </Badge>
-                                  )}
-                                  <span className="text-xs text-muted-foreground">{task.timestamp}</span>
+                          <div 
+                            className="p-4 cursor-pointer"
+                            onClick={() => toggleTaskExpand(task)}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3 flex-1">
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${colorClass}`}>
+                                  <Icon className="h-5 w-5" />
                                 </div>
-                                <p className="text-sm font-medium text-foreground mb-1">
-                                  {task.description}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {task.reason}
-                                </p>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                    <Badge variant="secondary" className="text-xs">
+                                      {task.type}
+                                    </Badge>
+                                    {task.urgency && (
+                                      <Badge variant="outline" className={`text-xs ${
+                                        task.urgency === "stat" ? "bg-red-500/10 text-red-500 border-red-500/20" :
+                                        task.urgency === "urgent" ? "bg-orange-500/10 text-orange-500 border-orange-500/20" :
+                                        "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                      }`}>
+                                        {task.urgency.toUpperCase()}
+                                      </Badge>
+                                    )}
+                                     {task.status === "reviewed" && (
+                                      <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/20">
+                                        ✓ Approved
+                                      </Badge>
+                                    )}
+                                    <span className="text-xs text-muted-foreground">{task.timestamp}</span>
+                                  </div>
+                                  <p className="text-sm font-medium text-foreground mb-1">
+                                    {task.description}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {task.reason}
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex gap-1">
-                              {task.status !== "reviewed" && (
+                              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                {task.status !== "reviewed" && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => approveTask(task.id)}
+                                    className="h-8 w-8 p-0 hover:bg-green-500/10"
+                                    title="Approve & Send"
+                                  >
+                                    <Check className="h-4 w-4 text-green-500" />
+                                  </Button>
+                                )}
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => approveTask(task.id)}
-                                  className="h-8 w-8 p-0 hover:bg-green-500/10"
-                                  title="Approve & Send"
+                                  onClick={() => removeTask(task.id)}
+                                  className="h-8 w-8 p-0 hover:bg-destructive/10"
+                                  title="Remove"
                                 >
-                                  <Check className="h-4 w-4 text-green-500" />
+                                  <X className="h-4 w-4 text-destructive" />
                                 </Button>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => removeTask(task.id)}
-                                className="h-8 w-8 p-0 hover:bg-destructive/10"
-                                title="Remove"
-                              >
-                                <X className="h-4 w-4 text-destructive" />
-                              </Button>
+                              </div>
                             </div>
                           </div>
+
+                          {/* Expanded Edit View */}
+                          {isExpanded && editableTask && (
+                            <div className="border-t p-4 space-y-3 bg-background/50" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Edit3 className="h-4 w-4 text-primary" />
+                                <h4 className="text-sm font-semibold text-foreground">Edit Task Details</h4>
+                              </div>
+                              
+                              <div className="space-y-2">
+                                <label className="text-xs font-medium text-muted-foreground">Type</label>
+                                <select
+                                  value={editableTask.type}
+                                  onChange={(e) => setEditableTask({ ...editableTask, type: e.target.value as DetectedTask["type"] })}
+                                  className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+                                >
+                                  <option value="Lab Order">Lab Order</option>
+                                  <option value="Prescription">Prescription</option>
+                                  <option value="Referral">Referral</option>
+                                  <option value="Follow-up">Follow-up</option>
+                                </select>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="text-xs font-medium text-muted-foreground">Description</label>
+                                <Textarea
+                                  value={editableTask.description}
+                                  onChange={(e) => setEditableTask({ ...editableTask, description: e.target.value })}
+                                  className="min-h-[80px]"
+                                />
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="text-xs font-medium text-muted-foreground">Reason</label>
+                                <Textarea
+                                  value={editableTask.reason}
+                                  onChange={(e) => setEditableTask({ ...editableTask, reason: e.target.value })}
+                                  className="min-h-[60px]"
+                                />
+                              </div>
+
+                              <div className="flex gap-2 pt-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => approveTask(task.id)}
+                                  className="gap-2"
+                                >
+                                  <Check className="h-4 w-4" />
+                                  Accept & Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setExpandedTaskId(null);
+                                    setEditableTask(null);
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </Card>
                       );
                     })}
@@ -600,6 +765,27 @@ const PatientConsultation = () => {
                   )}
                 </div>
               </ScrollArea>
+
+              {/* Action Buttons */}
+              {conversationTranscript.length > 0 && (
+                <div className="p-4 border-t flex gap-3 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={saveDraft}
+                    className="gap-2"
+                  >
+                    <Save className="h-4 w-4" />
+                    Save as Draft
+                  </Button>
+                  <Button
+                    onClick={generateSOAPNote}
+                    className="gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Save to Medical Notes
+                  </Button>
+                </div>
+              )}
             </Card>
           </div>
         </div>
@@ -610,6 +796,16 @@ const PatientConsultation = () => {
         onClose={() => setShowPreviousVisits(false)}
         visits={previousVisits}
         patientName={currentPatient?.name || ""}
+      />
+
+      <MedicalNotesPreviewModal
+        isOpen={showMedicalNotesPreview}
+        onClose={() => setShowMedicalNotesPreview(false)}
+        onSave={saveToMedicalNotes}
+        patientName={currentPatient?.name || ""}
+        patientMRN={currentPatient?.mrn || ""}
+        soapNote={generatedSOAP || { subjective: "", objective: "", assessment: "", plan: "" }}
+        demographics={currentPatient?.demographics}
       />
     </div>
   );
