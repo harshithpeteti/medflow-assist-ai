@@ -34,12 +34,19 @@ interface DetectedTask {
   timestamp: string;
 }
 
+interface SoapNote {
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+}
+
 const PatientConsultation = () => {
   const [selectedPatient, setSelectedPatient] = useState<number | null>(1);
   const [patientSearch, setPatientSearch] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [detectedTasks, setDetectedTasks] = useState<DetectedTask[]>([]);
-  const [soapNote, setSoapNote] = useState("");
+  const [soapNote, setSoapNote] = useState<SoapNote | null>(null);
   const [isGeneratingSOAP, setIsGeneratingSOAP] = useState(false);
   const [isReturnVisit, setIsReturnVisit] = useState(false);
   const [recommendedQuestions, setRecommendedQuestions] = useState<string[]>([]);
@@ -379,26 +386,67 @@ const PatientConsultation = () => {
           <ScrollArea className="flex-1 p-6">
             {soapNote ? (
               <div className="space-y-6">
-                {soapNote.split('\n\n').map((section, idx) => {
-                  const lines = section.split('\n');
-                  const title = lines[0];
-                  const content = lines.slice(1).join('\n');
-                  
-                  return (
-                    <div key={idx} className="space-y-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-1 h-8 bg-gradient-primary rounded-full" />
-                        <h3 className="text-lg font-bold text-foreground">{title}</h3>
-                      </div>
-                      <Card className="p-4 bg-muted/30">
-                        <p className="text-foreground whitespace-pre-wrap leading-relaxed">{content}</p>
-                      </Card>
-                      {idx < soapNote.split('\n\n').length - 1 && (
-                        <Separator className="my-4" />
-                      )}
+                {/* Subjective */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-1 h-8 bg-gradient-primary rounded-full" />
+                    <div>
+                      <h3 className="text-lg font-bold text-foreground">Subjective</h3>
+                      <p className="text-xs text-muted-foreground">Patient's reported symptoms and history</p>
                     </div>
-                  );
-                })}
+                  </div>
+                  <Card className="p-4 bg-muted/30 border-l-4 border-l-primary">
+                    <p className="text-foreground whitespace-pre-wrap leading-relaxed">{soapNote.subjective}</p>
+                  </Card>
+                </div>
+
+                <Separator className="my-4" />
+
+                {/* Objective */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-1 h-8 bg-accent rounded-full" />
+                    <div>
+                      <h3 className="text-lg font-bold text-foreground">Objective</h3>
+                      <p className="text-xs text-muted-foreground">Clinical findings and measurements</p>
+                    </div>
+                  </div>
+                  <Card className="p-4 bg-muted/30 border-l-4 border-l-accent">
+                    <p className="text-foreground whitespace-pre-wrap leading-relaxed">{soapNote.objective}</p>
+                  </Card>
+                </div>
+
+                <Separator className="my-4" />
+
+                {/* Assessment */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-1 h-8 bg-gradient-primary rounded-full" />
+                    <div>
+                      <h3 className="text-lg font-bold text-foreground">Assessment</h3>
+                      <p className="text-xs text-muted-foreground">Clinical diagnosis and evaluation</p>
+                    </div>
+                  </div>
+                  <Card className="p-4 bg-muted/30 border-l-4 border-l-primary">
+                    <p className="text-foreground whitespace-pre-wrap leading-relaxed">{soapNote.assessment}</p>
+                  </Card>
+                </div>
+
+                <Separator className="my-4" />
+
+                {/* Plan */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-1 h-8 bg-accent rounded-full" />
+                    <div>
+                      <h3 className="text-lg font-bold text-foreground">Plan</h3>
+                      <p className="text-xs text-muted-foreground">Treatment plan and follow-up</p>
+                    </div>
+                  </div>
+                  <Card className="p-4 bg-muted/30 border-l-4 border-l-accent">
+                    <p className="text-foreground whitespace-pre-wrap leading-relaxed">{soapNote.plan}</p>
+                  </Card>
+                </div>
               </div>
             ) : (
               <p className="text-muted-foreground italic">
