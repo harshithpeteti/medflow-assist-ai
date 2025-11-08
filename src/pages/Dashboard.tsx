@@ -1,6 +1,6 @@
 import { useState } from "react";
 import AppNavigation from "@/components/app/AppNavigation";
-import ActiveConsultation from "@/components/app/ActiveConsultation";
+import PatientConsultation from "@/components/app/PatientConsultation";
 import ClinicalNotes from "@/components/app/ClinicalNotes";
 import TaskQueue from "@/components/app/TaskQueue";
 import PatientList from "@/components/app/PatientList";
@@ -9,14 +9,14 @@ import DashboardOverview from "@/components/app/DashboardOverview";
 type View = "overview" | "consultation" | "notes" | "tasks" | "patients";
 
 const Dashboard = () => {
-  const [currentView, setCurrentView] = useState<View>("consultation");
+  const [currentView, setCurrentView] = useState<View>("patients");
 
   const renderView = () => {
     switch (currentView) {
       case "overview":
         return <DashboardOverview onStartConsultation={() => setCurrentView("consultation")} />;
       case "consultation":
-        return <ActiveConsultation />;
+        return <PatientConsultation />;
       case "notes":
         return <ClinicalNotes />;
       case "tasks":
