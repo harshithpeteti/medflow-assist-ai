@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import Problem from "@/components/Problem";
@@ -48,7 +49,7 @@ const Index = () => {
             <div>
               <h4 className="font-medium text-foreground mb-4">Legal</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground transition-colors">Privacy</a></li>
+                <li><Link to="/privacy" className="hover:text-foreground transition-colors">Privacy</Link></li>
                 <li><a href="#" className="hover:text-foreground transition-colors">Terms</a></li>
                 <li><a href="#" className="hover:text-foreground transition-colors">HIPAA</a></li>
                 <li><a href="#" className="hover:text-foreground transition-colors">Compliance</a></li>
