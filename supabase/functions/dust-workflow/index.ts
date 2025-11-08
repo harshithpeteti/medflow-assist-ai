@@ -34,141 +34,47 @@ serve(async (req) => {
 
     console.log(`Processing Dust workflow: ${workflowType}`);
 
-    let dustResponse;
-
+    // Prepare workflow-specific prompt prefix
+    let promptPrefix = '';
     switch (workflowType) {
-      case 'optimize-tasks': {
-        // Optimize and prioritize medical tasks
-        dustResponse = await fetch(`https://dust.tt/api/v1/w/${DUST_WORKSPACE_ID}/apps/task-optimizer/runs`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${DUST_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            specification_hash: payload.specificationHash || 'latest',
-            config: {
-              blocks: [
-                {
-                  type: 'input',
-                  name: 'tasks_input',
-                  value: JSON.stringify(payload.tasks)
-                }
-              ]
-            },
-            blocking: true,
-            stream: false
-          }),
-        });
+      case 'optimize-tasks':
+        promptPrefix = 'TASK OPTIMIZATION REQUEST:\nAnalyze and optimize the following medical tasks.\n\n';
         break;
-      }
-
-      case 'task-routing': {
-        // Route tasks to appropriate departments/specialists
-        dustResponse = await fetch(`https://dust.tt/api/v1/w/${DUST_WORKSPACE_ID}/apps/task-router/runs`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${DUST_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            specification_hash: 'latest',
-            config: {
-              blocks: [
-                {
-                  type: 'input',
-                  name: 'task_data',
-                  value: JSON.stringify(payload.task)
-                },
-                {
-                  type: 'input',
-                  name: 'patient_context',
-                  value: JSON.stringify(payload.patientContext || {})
-                }
-              ]
-            },
-            blocking: true,
-            stream: false
-          }),
-        });
+      case 'task-routing':
+        promptPrefix = 'TASK ROUTING REQUEST:\nRoute the following task to the appropriate department/specialist.\n\n';
         break;
-      }
-
-      case 'smart-followup': {
-        // Generate intelligent follow-up recommendations
-        dustResponse = await fetch(`https://dust.tt/api/v1/w/${DUST_WORKSPACE_ID}/apps/followup-agent/runs`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${DUST_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            specification_hash: 'latest',
-            config: {
-              blocks: [
-                {
-                  type: 'input',
-                  name: 'consultation_summary',
-                  value: payload.consultationSummary
-                },
-                {
-                  type: 'input',
-                  name: 'detected_tasks',
-                  value: JSON.stringify(payload.tasks)
-                },
-                {
-                  type: 'input',
-                  name: 'patient_history',
-                  value: JSON.stringify(payload.patientHistory || [])
-                }
-              ]
-            },
-            blocking: true,
-            stream: false
-          }),
-        });
+      case 'smart-followup':
+        promptPrefix = 'SMART FOLLOW-UP REQUEST:\nGenerate intelligent follow-up recommendations based on this consultation.\n\n';
         break;
-      }
-
-      case 'validate-prescription': {
-        // Validate prescriptions for drug interactions, dosage, etc.
-        dustResponse = await fetch(`https://dust.tt/api/v1/w/${DUST_WORKSPACE_ID}/apps/prescription-validator/runs`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${DUST_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            specification_hash: 'latest',
-            config: {
-              blocks: [
-                {
-                  type: 'input',
-                  name: 'prescription',
-                  value: JSON.stringify(payload.prescription)
-                },
-                {
-                  type: 'input',
-                  name: 'patient_medications',
-                  value: JSON.stringify(payload.currentMedications || [])
-                },
-                {
-                  type: 'input',
-                  name: 'patient_allergies',
-                  value: JSON.stringify(payload.allergies || [])
-                }
-              ]
-            },
-            blocking: true,
-            stream: false
-          }),
-        });
+      case 'validate-prescription':
+        promptPrefix = 'PRESCRIPTION VALIDATION REQUEST:\nValidate this prescription for drug interactions, dosage, and safety.\n\n';
         break;
-      }
-
       default:
         throw new Error(`Unknown workflow type: ${workflowType}`);
     }
+
+    // Call the single SmartAgent with workflow-specific prompt
+    const dustResponse = await fetch(`https://dust.tt/api/v1/w/${DUST_WORKSPACE_ID}/apps/SmartAgent/runs`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${DUST_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        specification_hash: 'latest',
+        config: {
+          blocks: [
+            {
+              type: 'input',
+              name: 'prompt',
+              value: promptPrefix + JSON.stringify(payload, null, 2)
+            }
+          ]
+        },
+        blocking: true,
+        stream: false
+      }),
+    });
 
     if (!dustResponse.ok) {
       const errorText = await dustResponse.text();
