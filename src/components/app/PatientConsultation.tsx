@@ -23,7 +23,6 @@ import {
   CheckCircle
 } from "lucide-react";
 import SOAPReviewModal from "./SOAPReviewModal";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useVoiceRecording } from "@/hooks/useVoiceRecording";
 
@@ -131,54 +130,57 @@ const PatientConsultation = () => {
     if (!text || text.trim().length === 0) return;
 
     try {
-      const { data, error } = await supabase.functions.invoke("detect-medical-tasks", {
-        body: { transcription: text },
-      });
+      // Mock task detection based on keywords
+      const mockTasks: DetectedTask[] = [];
+      
+      if (text.toLowerCase().includes('blood test') || text.toLowerCase().includes('lab')) {
+        mockTasks.push({
+          id: Date.now().toString() + '-lab',
+          type: "Lab Order",
+          description: "Complete Blood Count (CBC)",
+          reason: "Detected mention of blood test in consultation",
+          details: {},
+          status: "pending",
+          timestamp: new Date().toISOString(),
+        });
+      }
+      
+      if (text.toLowerCase().includes('medication') || text.toLowerCase().includes('prescription')) {
+        mockTasks.push({
+          id: Date.now().toString() + '-rx',
+          type: "Prescription",
+          description: "Review and prescribe medication",
+          reason: "Medication discussed during consultation",
+          details: {},
+          status: "pending",
+          timestamp: new Date().toISOString(),
+        });
+      }
+      
+      if (text.toLowerCase().includes('follow up') || text.toLowerCase().includes('next visit')) {
+        mockTasks.push({
+          id: Date.now().toString() + '-followup',
+          type: "Follow-up",
+          description: "Schedule follow-up appointment",
+          reason: "Follow-up mentioned in consultation",
+          details: {},
+          status: "pending",
+          timestamp: new Date().toISOString(),
+        });
+      }
 
-      if (error) throw error;
-
-      if (data?.tasks && data.tasks.length > 0) {
+      if (mockTasks.length > 0) {
         setDetectedTasks(prev => {
           const existingIds = new Set(prev.map(t => t.description));
-          const newTasks = data.tasks.filter((t: DetectedTask) => 
-            !existingIds.has(t.description)
-          );
+          const newTasks = mockTasks.filter(t => !existingIds.has(t.description));
           return [...prev, ...newTasks];
         });
       }
     } catch (error: any) {
       console.error("Error detecting tasks:", error);
-      if (error.message?.includes("Rate limit")) {
-        toast.error("AI task detection temporarily paused. Please slow down.");
-      }
     }
   };
 
-  const generateSOAPNote = async () => {
-    if (!transcript || transcript.trim().length === 0) {
-      toast.error("No transcription available to generate SOAP note.");
-      return;
-    }
-
-    setIsGeneratingSOAP(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("generate-soap-note", {
-        body: { transcription: transcript },
-      });
-
-      if (error) throw error;
-
-      if (data?.soapNote) {
-        setSoapNote(data.soapNote);
-        toast.success("SOAP note generated successfully");
-      }
-    } catch (error: any) {
-      console.error("Error generating SOAP note:", error);
-      toast.error(error.message || "Failed to generate SOAP note");
-    } finally {
-      setIsGeneratingSOAP(false);
-    }
-  };
 
   const handleStartRecording = async () => {
     if (!selectedPatient) {
@@ -198,19 +200,22 @@ const PatientConsultation = () => {
     // Generate SOAP note and show review modal
     setIsGeneratingSOAP(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-soap-note", {
-        body: { transcription: transcript },
-      });
+      // Mock SOAP note generation
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate AI processing
+      
+      const mockSOAP: SoapNote = {
+        subjective: `Patient ${currentPatient?.name} presents with symptoms discussed during consultation. ${transcript.substring(0, 200)}...`,
+        objective: "Vital signs stable. Physical examination findings documented during visit.",
+        assessment: "Clinical impression based on patient history and examination findings.",
+        plan: "Treatment plan to be determined based on assessment. Follow-up as needed."
+      };
 
-      if (error) throw error;
-
-      if (data?.soapNote) {
-        setSoapNote(data.soapNote);
-        setShowSOAPReview(true);
-      }
+      setSoapNote(mockSOAP);
+      setShowSOAPReview(true);
+      toast.success("SOAP note generated");
     } catch (error: any) {
       console.error("Error generating SOAP note:", error);
-      toast.error(error.message || "Failed to generate SOAP note");
+      toast.error("Failed to generate SOAP note");
     } finally {
       setIsGeneratingSOAP(false);
     }
