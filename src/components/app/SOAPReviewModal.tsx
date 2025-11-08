@@ -21,10 +21,11 @@ interface SOAPReviewModalProps {
   soapNote: SoapNote | null;
   patientName: string;
   patientMRN: string;
+  patientDemographics?: any;
   transcript: string;
 }
 
-const SOAPReviewModal = ({ open, onClose, soapNote, patientName, patientMRN, transcript }: SOAPReviewModalProps) => {
+const SOAPReviewModal = ({ open, onClose, soapNote, patientName, patientMRN, patientDemographics, transcript }: SOAPReviewModalProps) => {
   const [editedNote, setEditedNote] = useState<SoapNote | null>(soapNote);
   const [editingSection, setEditingSection] = useState<string | null>(null);
 
@@ -42,6 +43,7 @@ const SOAPReviewModal = ({ open, onClose, soapNote, patientName, patientMRN, tra
       id: Date.now().toString(),
       patientName,
       patientMRN,
+      demographics: patientDemographics,
       date: new Date().toISOString(),
       transcript,
       ...editedNote,
@@ -145,13 +147,30 @@ const SOAPReviewModal = ({ open, onClose, soapNote, patientName, patientMRN, tra
                     </div>
                   ) : (
                     <Card
-                      className={`p-4 bg-muted/30 border-l-4 border-l-${section.color} cursor-pointer hover:bg-muted/50 transition-colors`}
+                      className={`p-5 bg-muted/30 border-l-4 border-l-${section.color} cursor-pointer hover:bg-muted/50 transition-colors`}
                       onClick={() => setEditingSection(section.key)}
                     >
-                      <p className="text-foreground whitespace-pre-wrap leading-relaxed">
-                        {editedNote[section.key]}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-2">Click to edit</p>
+                      <div className="text-foreground leading-relaxed space-y-2">
+                        {editedNote[section.key].split('\n').map((line, idx) => {
+                          if (line.trim().startsWith('•')) {
+                            return (
+                              <div key={idx} className="flex gap-3">
+                                <span className="text-primary font-bold mt-0.5">•</span>
+                                <span className="flex-1">{line.substring(1).trim()}</span>
+                              </div>
+                            );
+                          } else if (line.trim().startsWith('-')) {
+                            return (
+                              <div key={idx} className="flex gap-3 ml-6">
+                                <span className="text-muted-foreground">-</span>
+                                <span className="flex-1 text-sm">{line.substring(1).trim()}</span>
+                              </div>
+                            );
+                          }
+                          return line.trim() ? <p key={idx}>{line}</p> : <div key={idx} className="h-1" />;
+                        })}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">Click to edit</p>
                     </Card>
                   )}
                 </div>

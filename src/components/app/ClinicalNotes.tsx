@@ -11,6 +11,7 @@ interface StoredNote {
   id: string;
   patientName: string;
   patientMRN: string;
+  demographics?: any;
   date: string;
   transcript: string;
   subjective: string;
@@ -146,9 +147,9 @@ const ClinicalNotes = () => {
                 <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
                   <User className="h-6 w-6 text-primary-foreground" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <h1 className="text-2xl font-bold text-foreground mb-2">{selectedNote.patientName}</h1>
-                  <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 flex-wrap mb-3">
                     <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
                       SOAP Note
                     </Badge>
@@ -160,7 +161,42 @@ const ClinicalNotes = () => {
                       <span>{formatDate(selectedNote.date)}</span>
                     </div>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-2">{selectedNote.patientMRN}</p>
+                  <p className="text-sm text-muted-foreground mb-3">MRN: {selectedNote.patientMRN}</p>
+                  
+                  {selectedNote.demographics && (
+                    <div className="flex flex-wrap gap-4 text-sm">
+                      {selectedNote.demographics.age && (
+                        <span className="text-muted-foreground">
+                          <span className="font-medium text-foreground">Age:</span> {selectedNote.demographics.age}
+                        </span>
+                      )}
+                      {selectedNote.demographics.gender && (
+                        <span className="text-muted-foreground">
+                          <span className="font-medium text-foreground">Gender:</span> {selectedNote.demographics.gender}
+                        </span>
+                      )}
+                      {selectedNote.demographics.smoker && selectedNote.demographics.smoker !== "No" && (
+                        <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/20">
+                          Smoker: {selectedNote.demographics.smoker}
+                        </Badge>
+                      )}
+                      {selectedNote.demographics.diabetes === "Yes" && (
+                        <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20">
+                          Diabetes
+                        </Badge>
+                      )}
+                      {selectedNote.demographics.hypertension === "Yes" && (
+                        <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20">
+                          Hypertension
+                        </Badge>
+                      )}
+                      {selectedNote.demographics.allergies && (
+                        <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
+                          Allergies: {selectedNote.demographics.allergies}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <Button variant="outline" className="gap-2">
@@ -188,9 +224,26 @@ const ClinicalNotes = () => {
                   </div>
                   
                   <Card className="p-5 bg-muted/30 border-l-4 border-l-primary">
-                    <p className="text-foreground whitespace-pre-wrap leading-relaxed text-sm">
-                      {section.content}
-                    </p>
+                    <div className="text-foreground leading-relaxed space-y-2">
+                      {section.content.split('\n').map((line, lineIdx) => {
+                        if (line.trim().startsWith('•')) {
+                          return (
+                            <div key={lineIdx} className="flex gap-3">
+                              <span className="text-primary font-bold mt-0.5">•</span>
+                              <span className="flex-1">{line.substring(1).trim()}</span>
+                            </div>
+                          );
+                        } else if (line.trim().startsWith('-')) {
+                          return (
+                            <div key={lineIdx} className="flex gap-3 ml-6">
+                              <span className="text-muted-foreground">-</span>
+                              <span className="flex-1 text-sm">{line.substring(1).trim()}</span>
+                            </div>
+                          );
+                        }
+                        return line.trim() ? <p key={lineIdx}>{line}</p> : <div key={lineIdx} className="h-1" />;
+                      })}
+                    </div>
                   </Card>
                   
                   {idx < 3 && <Separator className="my-4" />}

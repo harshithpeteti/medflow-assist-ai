@@ -60,6 +60,17 @@ const PatientConsultation = () => {
   const [newTaskType, setNewTaskType] = useState<DetectedTask["type"]>("Lab Order");
   const [showPreviousVisits, setShowPreviousVisits] = useState(false);
   const [previousVisits, setPreviousVisits] = useState<any[]>([]);
+  
+  // Patient demographics
+  const [showDemographics, setShowDemographics] = useState(false);
+  const [demographics, setDemographics] = useState({
+    age: "",
+    gender: "",
+    smoker: "No",
+    diabetes: "No",
+    hypertension: "No",
+    allergies: "",
+  });
 
   const { 
     transcript,
@@ -91,24 +102,37 @@ const PatientConsultation = () => {
         name: patientName.trim(),
         mrn: existingPatient.patientMRN,
         visitCount: patientVisits.length,
-        lastVisit: new Date(patientVisits[patientVisits.length - 1].timestamp).toLocaleDateString(),
+        lastVisit: new Date(patientVisits[patientVisits.length - 1].date).toLocaleDateString(),
+        demographics: existingPatient.demographics || {},
       });
       setIsReturnVisit(true);
       setPreviousVisits(patientVisits);
+      setDemographics(existingPatient.demographics || demographics);
       toast.success(`Welcome back ${patientName}! (${patientVisits.length} previous visits)`);
     } else {
-      // New patient
-      const newMRN = `${patientName.substring(0, 3).toUpperCase()}-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-      setCurrentPatient({
-        name: patientName.trim(),
-        mrn: newMRN,
-        visitCount: 0,
-        lastVisit: "Never",
-      });
-      setIsReturnVisit(false);
-      setPreviousVisits([]);
-      toast.success(`New patient created: ${patientName}`);
+      // New patient - show demographics form
+      setShowDemographics(true);
     }
+  };
+
+  const handleDemographicsSubmit = () => {
+    if (!demographics.age || !demographics.gender) {
+      toast.error("Please fill in age and gender");
+      return;
+    }
+
+    const newMRN = `${patientName.substring(0, 3).toUpperCase()}-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
+    setCurrentPatient({
+      name: patientName.trim(),
+      mrn: newMRN,
+      visitCount: 0,
+      lastVisit: "Never",
+      demographics,
+    });
+    setIsReturnVisit(false);
+    setPreviousVisits([]);
+    setShowDemographics(false);
+    toast.success(`New patient created: ${patientName}`);
   };
 
   useEffect(() => {
@@ -208,10 +232,10 @@ const PatientConsultation = () => {
       await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate AI processing
       
       const mockSOAP: SoapNote = {
-        subjective: `Patient ${currentPatient?.name} presents with symptoms discussed during consultation. ${transcript.substring(0, 200)}...`,
-        objective: "Vital signs stable. Physical examination findings documented during visit.",
-        assessment: "Clinical impression based on patient history and examination findings.",
-        plan: "Treatment plan to be determined based on assessment. Follow-up as needed."
+        subjective: `• Chief Complaint: Main symptoms discussed\n• History of Present Illness: ${transcript.substring(0, 150)}...\n• Review of Systems: As documented\n• Past Medical History: ${currentPatient?.demographics?.diabetes === "Yes" ? "Type 2 Diabetes, " : ""}${currentPatient?.demographics?.hypertension === "Yes" ? "Hypertension, " : ""}${currentPatient?.demographics?.smoker === "Yes" ? "Smoker" : "Non-smoker"}`,
+        objective: `• Vital Signs: Within normal limits\n• Physical Examination:\n  - General: Alert and oriented\n  - Cardiovascular: Regular rate and rhythm\n  - Respiratory: Clear to auscultation bilaterally\n  - Other findings as documented during consultation`,
+        assessment: `• Primary Diagnosis: Based on clinical findings and patient history\n• Differential Diagnoses: Under consideration\n• Clinical Impression: Stable condition, requires monitoring`,
+        plan: `• Medications: Review and update as needed\n• Laboratory Tests: Order appropriate tests\n• Follow-up: Schedule as clinically indicated\n• Patient Education: Discussed management and lifestyle modifications\n• Referrals: As needed based on assessment`
       };
 
       setSoapNote(mockSOAP);
@@ -277,7 +301,7 @@ const PatientConsultation = () => {
   return (
     <div className="flex flex-col h-[calc(100vh-88px)] gap-4 animate-fade-in">
       {/* Patient Name Entry or Patient Header */}
-      {!currentPatient ? (
+      {!currentPatient && !showDemographics ? (
         <Card className="p-6">
           <div className="max-w-2xl mx-auto space-y-4">
             <div className="text-center space-y-2">
@@ -301,6 +325,106 @@ const PatientConsultation = () => {
               >
                 <UserPlus className="h-5 w-5" />
                 Start Consultation
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : showDemographics ? (
+        <Card className="p-6">
+          <div className="max-w-3xl mx-auto space-y-6">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold text-foreground">New Patient: {patientName}</h2>
+              <p className="text-sm text-muted-foreground">
+                Please enter patient demographics to continue
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Age *</label>
+                <Input
+                  type="number"
+                  placeholder="Age"
+                  value={demographics.age}
+                  onChange={(e) => setDemographics({ ...demographics, age: e.target.value })}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Gender *</label>
+                <select
+                  value={demographics.gender}
+                  onChange={(e) => setDemographics({ ...demographics, gender: e.target.value })}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+                >
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Smoker</label>
+                <select
+                  value={demographics.smoker}
+                  onChange={(e) => setDemographics({ ...demographics, smoker: e.target.value })}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+                >
+                  <option value="No">No</option>
+                  <option value="Yes">Yes</option>
+                  <option value="Former">Former</option>
+                </select>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Diabetes</label>
+                <select
+                  value={demographics.diabetes}
+                  onChange={(e) => setDemographics({ ...demographics, diabetes: e.target.value })}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+                >
+                  <option value="No">No</option>
+                  <option value="Yes">Yes</option>
+                </select>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Hypertension</label>
+                <select
+                  value={demographics.hypertension}
+                  onChange={(e) => setDemographics({ ...demographics, hypertension: e.target.value })}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+                >
+                  <option value="No">No</option>
+                  <option value="Yes">Yes</option>
+                </select>
+              </div>
+              
+              <div className="space-y-2 col-span-2">
+                <label className="text-sm font-medium text-foreground">Known Allergies</label>
+                <Textarea
+                  placeholder="Enter any known allergies..."
+                  value={demographics.allergies}
+                  onChange={(e) => setDemographics({ ...demographics, allergies: e.target.value })}
+                  className="min-h-[80px]"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-2 justify-end">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowDemographics(false);
+                  setPatientName("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleDemographicsSubmit} className="gap-2">
+                <CheckCircle className="h-4 w-4" />
+                Continue to Consultation
               </Button>
             </div>
           </div>
@@ -553,6 +677,7 @@ const PatientConsultation = () => {
           soapNote={soapNote}
           patientName={currentPatient?.name || ""}
           patientMRN={currentPatient?.mrn || ""}
+          patientDemographics={currentPatient?.demographics}
           transcript={transcript}
         />
 
