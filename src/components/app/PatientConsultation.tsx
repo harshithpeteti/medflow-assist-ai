@@ -328,44 +328,62 @@ const PatientConsultation = () => {
       <div className="flex-1 flex flex-col space-y-4 overflow-hidden">
         {/* Patient Header */}
         {currentPatient && (
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center">
-                  <User className="h-6 w-6 text-primary-foreground" />
+          <Card className="p-6">
+            <div className="flex items-start justify-between gap-6">
+              <div className="flex items-start gap-4 flex-1">
+                <div className="w-14 h-14 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
+                  <User className="h-7 w-7 text-primary-foreground" />
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-foreground">{currentPatient.name}</h2>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <span>{currentPatient.age} years • MRN: {currentPatient.mrn}</span>
-                    {isReturnVisit && (
-                      <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20 gap-1">
-                        <RefreshCw className="h-3 w-3" />
+                
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <h2 className="text-2xl font-bold text-foreground mb-2">{currentPatient.name}</h2>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <span className="font-medium">{currentPatient.age} years old</span>
+                      <Separator orientation="vertical" className="h-4" />
+                      <span>MRN: {currentPatient.mrn}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {isReturnVisit ? (
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                        <RefreshCw className="h-3 w-3 mr-1" />
                         Return Visit ({currentPatient.visitCount} total)
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                        New Patient
                       </Badge>
                     )}
                   </div>
+
                   {currentPatient.conditions.length > 0 && (
-                    <div className="flex gap-2 mt-2">
-                      {currentPatient.conditions.map((condition, idx) => (
-                        <Badge key={idx} variant="secondary" className="text-xs">
-                          {condition}
-                        </Badge>
-                      ))}
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-2">Medical History:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {currentPatient.conditions.map((condition, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">
+                            {condition}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                   )}
+
                   {isReturnVisit && (
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground">
                       Last visit: {currentPatient.lastVisit}
                     </p>
                   )}
                 </div>
               </div>
+
               <Button
                 onClick={isRecording ? handleStopRecording : handleStartRecording}
                 variant={isRecording ? "destructive" : "hero"}
                 size="lg"
-                className="gap-2"
+                className="gap-2 flex-shrink-0"
               >
                 {isRecording ? (
                   <>
