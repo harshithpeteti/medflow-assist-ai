@@ -26,6 +26,7 @@ import {
 import SOAPReviewModal from "./SOAPReviewModal";
 import PreviousVisitsModal from "./PreviousVisitsModal";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { useVoiceRecording } from "@/hooks/useVoiceRecording";
 
 interface DetectedTask {
@@ -61,16 +62,9 @@ const PatientConsultation = () => {
   const [showPreviousVisits, setShowPreviousVisits] = useState(false);
   const [previousVisits, setPreviousVisits] = useState<any[]>([]);
   
-  // Patient demographics - editable during consultation
-  const [demographics, setDemographics] = useState({
-    age: "",
-    gender: "",
-    smoker: "No",
-    alcohol: "No",
-    diabetes: "No",
-    hypertension: "No",
-    allergies: "",
-  });
+  // AI-extracted medical information
+  const [extractedInfo, setExtractedInfo] = useState<any>(null);
+  const [isExtractingInfo, setIsExtractingInfo] = useState(false);
 
   const { 
     transcript,
@@ -107,7 +101,7 @@ const PatientConsultation = () => {
       });
       setIsReturnVisit(true);
       setPreviousVisits(patientVisits);
-      setDemographics(existingPatient.demographics || demographics);
+      setExtractedInfo(existingPatient.demographics || null);
       toast.success(`Welcome back ${patientName}! (${patientVisits.length} previous visits)`);
     } else {
       // New patient - go straight to consultation
@@ -215,29 +209,51 @@ const PatientConsultation = () => {
     await stopVoiceRecording();
     toast.success("Recording stopped");
     
-    // Generate SOAP note and show review modal
+    if (!transcript || transcript.length < 50) {
+      toast.error("Transcript too short to generate SOAP note");
+      return;
+    }
+
+    // Extract medical information from transcript using AI
+    setIsExtractingInfo(true);
+    try {
+      const { data: extractedData, error: extractError } = await supabase.functions.invoke(
+        "extract-medical-info",
+        { body: { transcript } }
+      );
+
+      if (extractError) throw extractError;
+      
+      setExtractedInfo(extractedData);
+      toast.success("Medical information extracted");
+    } catch (error: any) {
+      console.error("Error extracting medical info:", error);
+      toast.error("Failed to extract medical information");
+    } finally {
+      setIsExtractingInfo(false);
+    }
+    
+    // Generate SOAP note with AI
     setIsGeneratingSOAP(true);
     try {
-      // Mock SOAP note generation
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate AI processing
-      
-      const demographics = currentPatient?.demographics || {};
-      const mockSOAP: SoapNote = {
-        subjective: `**Chief Complaint:** Main presenting symptoms\n\n**History of Present Illness:**\n${transcript.substring(0, 200)}...\n\n**Review of Systems:** As documented during consultation\n\n**Past Medical History:**\n${demographics.diabetes === "Yes" ? "• Type 2 Diabetes Mellitus\n" : ""}${demographics.hypertension === "Yes" ? "• Essential Hypertension\n" : ""}${demographics.smoker === "Yes" || demographics.smoker === "Former" ? `• Tobacco use (${demographics.smoker})\n` : ""}${demographics.alcohol === "Yes" ? "• Alcohol use\n" : ""}${demographics.allergies ? `\n**Known Allergies:** ${demographics.allergies}` : ""}`,
-        
-        objective: `**Vital Signs:** Within normal limits\n\n**Physical Examination:**\n• **General:** Alert and oriented, appears stated age\n• **Cardiovascular:** Regular rate and rhythm, no murmurs\n• **Respiratory:** Clear to auscultation bilaterally, no distress\n• **Neurological:** Cranial nerves intact, normal gait\n• **Other findings:** As documented during consultation`,
-        
-        assessment: `**Primary Diagnosis:** [Based on clinical presentation]\n\n**Differential Diagnoses:**\n• Consider alternative diagnoses based on symptoms\n• Further evaluation needed\n\n**Clinical Impression:**\n• Patient presents with symptoms requiring evaluation\n• Current condition appears stable\n• Risk factors noted: ${demographics.diabetes === "Yes" ? "Diabetes, " : ""}${demographics.hypertension === "Yes" ? "Hypertension, " : ""}${demographics.smoker === "Yes" ? "Active smoker" : ""}`,
-        
-        plan: `**Medications:**\n• Review current medications\n• Adjust dosages as needed\n• New prescriptions as indicated\n\n**Diagnostic Tests:**\n• Laboratory work: CBC, CMP as indicated\n• Imaging studies if clinically necessary\n\n**Follow-up Care:**\n• Return visit in 2-4 weeks or sooner if symptoms worsen\n• Monitor response to treatment\n\n**Patient Education:**\n• Discussed diagnosis and treatment options\n• Medication compliance emphasized\n• Lifestyle modifications reviewed\n${demographics.smoker === "Yes" ? "• Smoking cessation counseling provided\n" : ""}${demographics.alcohol === "Yes" ? "• Alcohol moderation discussed\n" : ""}\n**Referrals:** As needed based on clinical assessment`
-      };
+      const { data: soapData, error: soapError } = await supabase.functions.invoke(
+        "generate-soap-note-ai",
+        { 
+          body: { 
+            transcript,
+            medicalInfo: extractedInfo 
+          } 
+        }
+      );
 
-      setSoapNote(mockSOAP);
+      if (soapError) throw soapError;
+
+      setSoapNote(soapData);
       setShowSOAPReview(true);
       toast.success("SOAP note generated");
     } catch (error: any) {
       console.error("Error generating SOAP note:", error);
-      toast.error("Failed to generate SOAP note");
+      toast.error(error.message || "Failed to generate SOAP note");
     } finally {
       setIsGeneratingSOAP(false);
     }
@@ -327,164 +343,99 @@ const PatientConsultation = () => {
         </div>
       ) : (
         <>
-          {/* Left Sidebar - Patient Info & Demographics */}
-          <Card className="w-80 flex flex-col">
-            <div className="p-4 border-b border-border">
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
-                  <User className="h-6 w-6 text-primary-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-lg font-bold text-foreground truncate">{currentPatient.name}</h2>
-                  <p className="text-xs text-muted-foreground">MRN: {currentPatient.mrn}</p>
-                  {isReturnVisit && (
-                    <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20 mt-2">
-                      <RefreshCw className="h-3 w-3 mr-1" />
-                      Visit #{currentPatient.visitCount + 1}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-              
-              {isReturnVisit && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowPreviousVisits(true)}
-                  className="w-full gap-2"
-                >
-                  <History className="h-3 w-3" />
-                  View Previous Visits
-                </Button>
-              )}
-            </div>
-
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-3">Patient Information</h3>
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Age</label>
-                      <Input
-                        type="number"
-                        placeholder="Age"
-                        value={demographics.age}
-                        onChange={(e) => setDemographics({ ...demographics, age: e.target.value })}
-                        className="h-9"
-                      />
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Gender</label>
-                      <select
-                        value={demographics.gender}
-                        onChange={(e) => setDemographics({ ...demographics, gender: e.target.value })}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm h-9"
-                      >
-                        <option value="">Select</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-3">Medical History</h3>
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Smoker</label>
-                      <select
-                        value={demographics.smoker}
-                        onChange={(e) => setDemographics({ ...demographics, smoker: e.target.value })}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm h-9"
-                      >
-                        <option value="No">No</option>
-                        <option value="Yes">Yes</option>
-                        <option value="Former">Former</option>
-                      </select>
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Alcohol Use</label>
-                      <select
-                        value={demographics.alcohol}
-                        onChange={(e) => setDemographics({ ...demographics, alcohol: e.target.value })}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm h-9"
-                      >
-                        <option value="No">No</option>
-                        <option value="Occasional">Occasional</option>
-                        <option value="Yes">Regular</option>
-                      </select>
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Diabetes</label>
-                      <select
-                        value={demographics.diabetes}
-                        onChange={(e) => setDemographics({ ...demographics, diabetes: e.target.value })}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm h-9"
-                      >
-                        <option value="No">No</option>
-                        <option value="Yes">Yes</option>
-                      </select>
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Hypertension</label>
-                      <select
-                        value={demographics.hypertension}
-                        onChange={(e) => setDemographics({ ...demographics, hypertension: e.target.value })}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm h-9"
-                      >
-                        <option value="No">No</option>
-                        <option value="Yes">Yes</option>
-                      </select>
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Known Allergies</label>
-                      <Textarea
-                        placeholder="List any allergies..."
-                        value={demographics.allergies}
-                        onChange={(e) => setDemographics({ ...demographics, allergies: e.target.value })}
-                        className="min-h-[60px] text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </ScrollArea>
-
-            <div className="p-4 border-t border-border">
-              <Button
-                onClick={isRecording ? handleStopRecording : handleStartRecording}
-                variant={isRecording ? "destructive" : "default"}
-                size="lg"
-                className="w-full gap-2"
-              >
-                {isRecording ? (
-                  <>
-                    <Square className="h-5 w-5" />
-                    Stop Recording
-                  </>
-                ) : (
-                  <>
-                    <Mic className="h-5 w-5" />
-                    Start Recording
-                  </>
-                )}
-              </Button>
-            </div>
-          </Card>
-
           {/* Main Content */}
           <div className="flex-1 flex flex-col space-y-4 overflow-hidden">
-        {/* Recording & Transcription with Tabs */}
+            {/* Patient Header with Start Recording */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between gap-6">
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
+                    <User className="h-6 w-6 text-primary-foreground" />
+                  </div>
+                  
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h2 className="text-xl font-bold text-foreground">{currentPatient.name}</h2>
+                      {isReturnVisit && (
+                        <>
+                          <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                            Visit #{currentPatient.visitCount + 1}
+                          </Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowPreviousVisits(true)}
+                            className="gap-1 h-7 text-xs"
+                          >
+                            <History className="h-3 w-3" />
+                            Previous Visits
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">MRN: {currentPatient.mrn}</p>
+                  </div>
+                  
+                  {/* Extracted Medical Info - Live Display */}
+                  {extractedInfo && (
+                    <div className="flex flex-wrap gap-2">
+                      {extractedInfo.age && (
+                        <Badge variant="secondary">{extractedInfo.age} yrs</Badge>
+                      )}
+                      {extractedInfo.gender && (
+                        <Badge variant="secondary">{extractedInfo.gender}</Badge>
+                      )}
+                      {extractedInfo.smoker === "Yes" && (
+                        <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/20 font-semibold">
+                          **SMOKER**
+                        </Badge>
+                      )}
+                      {extractedInfo.diabetes === "Yes" && (
+                        <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20 font-semibold">
+                          **DIABETIC**
+                        </Badge>
+                      )}
+                      {extractedInfo.hypertension === "Yes" && (
+                        <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20 font-semibold">
+                          **HTN**
+                        </Badge>
+                      )}
+                      {extractedInfo.alcohol === "Yes" && (
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20">
+                          Alcohol Use
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  onClick={isRecording ? handleStopRecording : handleStartRecording}
+                  variant={isRecording ? "destructive" : "default"}
+                  size="lg"
+                  className="gap-2 flex-shrink-0"
+                  disabled={isGeneratingSOAP || isExtractingInfo}
+                >
+                  {isGeneratingSOAP || isExtractingInfo ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      Processing...
+                    </>
+                  ) : isRecording ? (
+                    <>
+                      <Square className="h-5 w-5" />
+                      Stop & Generate SOAP
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="h-5 w-5" />
+                      Start Recording
+                    </>
+                  )}
+                </Button>
+              </div>
+            </Card>
         <Card className="flex-1 flex flex-col overflow-hidden">
           <div className="p-4 border-b border-border">
             <h2 className="text-xl font-semibold text-foreground">Live Transcription</h2>
@@ -661,7 +612,7 @@ const PatientConsultation = () => {
           soapNote={soapNote}
           patientName={currentPatient?.name || ""}
           patientMRN={currentPatient?.mrn || ""}
-          patientDemographics={currentPatient?.demographics}
+          patientDemographics={extractedInfo}
           transcript={transcript}
         />
 
