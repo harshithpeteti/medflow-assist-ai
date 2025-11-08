@@ -11,49 +11,16 @@ export const useVoiceRecording = (options: VoiceRecordingOptions = {}) => {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [currentSpeaker, setCurrentSpeaker] = useState<'doctor' | 'patient'>('patient');
+  const [currentSpeaker, setCurrentSpeaker] = useState<'doctor' | 'patient'>('doctor');
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyzerRef = useRef<AnalyserNode | null>(null);
-  const pitchDetectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const speakerAtRecordingRef = useRef<'doctor' | 'patient'>('doctor');
 
-  // Analyze pitch to detect speaker changes
-  const analyzePitch = useCallback(() => {
-    if (!analyzerRef.current || !audioContextRef.current) return;
-
-    const bufferLength = analyzerRef.current.fftSize;
-    const dataArray = new Float32Array(bufferLength);
-    analyzerRef.current.getFloatTimeDomainData(dataArray);
-
-    // Simple autocorrelation for pitch detection
-    let maxCorrelation = 0;
-    let fundamentalFrequency = 0;
-    
-    for (let lag = 1; lag < bufferLength / 2; lag++) {
-      let correlation = 0;
-      for (let i = 0; i < bufferLength / 2; i++) {
-        correlation += dataArray[i] * dataArray[i + lag];
-      }
-      if (correlation > maxCorrelation && correlation > 0.01) {
-        maxCorrelation = correlation;
-        fundamentalFrequency = audioContextRef.current!.sampleRate / lag;
-      }
-    }
-
-    // Detect speaker based on pitch (male voices typically 85-180 Hz, female/child 165-300 Hz)
-    if (fundamentalFrequency > 0) {
-      const isLowPitch = fundamentalFrequency < 165;
-      const detectedSpeaker = isLowPitch ? 'doctor' : 'patient';
-      
-      if (detectedSpeaker !== currentSpeaker) {
-        setCurrentSpeaker(detectedSpeaker);
-        options.onSpeakerDetected?.(detectedSpeaker);
-      }
-    }
-  }, [currentSpeaker, options]);
+  const toggleSpeaker = useCallback(() => {
+    setCurrentSpeaker(prev => prev === 'doctor' ? 'patient' : 'doctor');
+  }, []);
 
   const startRecording = useCallback(async () => {
     try {
@@ -69,16 +36,9 @@ export const useVoiceRecording = (options: VoiceRecordingOptions = {}) => {
       
       streamRef.current = stream;
       audioChunksRef.current = [];
-
-      // Set up audio analysis for speaker detection
-      audioContextRef.current = new AudioContext({ sampleRate: 16000 });
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      analyzerRef.current = audioContextRef.current.createAnalyser();
-      analyzerRef.current.fftSize = 2048;
-      source.connect(analyzerRef.current);
-
-      // Start pitch detection for speaker identification
-      pitchDetectionIntervalRef.current = setInterval(analyzePitch, 500);
+      
+      // Store the current speaker at the time of starting this recording chunk
+      speakerAtRecordingRef.current = currentSpeaker;
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
@@ -123,8 +83,8 @@ export const useVoiceRecording = (options: VoiceRecordingOptions = {}) => {
 
             if (data?.text) {
               console.log("Transcription received:", data.text);
-              // Add speaker label to transcript
-              const speakerLabel = currentSpeaker === 'doctor' ? '[Doctor]' : '[Patient]';
+              // Use the speaker that was active when this chunk was recorded
+              const speakerLabel = speakerAtRecordingRef.current === 'doctor' ? '[Doctor]' : '[Patient]';
               setTranscript(prev => prev + `${speakerLabel} ${data.text} `);
             }
           } catch (err) {
@@ -148,6 +108,8 @@ export const useVoiceRecording = (options: VoiceRecordingOptions = {}) => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           mediaRecorderRef.current.stop();
           audioChunksRef.current = [];
+          // Update the speaker reference for the next chunk
+          speakerAtRecordingRef.current = currentSpeaker;
           mediaRecorderRef.current.start();
         }
       }, 1500);
@@ -172,12 +134,6 @@ export const useVoiceRecording = (options: VoiceRecordingOptions = {}) => {
         clearInterval(interval);
       }
       
-      // Clear pitch detection interval
-      if (pitchDetectionIntervalRef.current) {
-        clearInterval(pitchDetectionIntervalRef.current);
-        pitchDetectionIntervalRef.current = null;
-      }
-      
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       
@@ -186,12 +142,6 @@ export const useVoiceRecording = (options: VoiceRecordingOptions = {}) => {
         streamRef.current = null;
       }
       
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-      
-      analyzerRef.current = null;
       mediaRecorderRef.current = null;
       console.log("Recording stopped");
     }
@@ -206,6 +156,7 @@ export const useVoiceRecording = (options: VoiceRecordingOptions = {}) => {
     isListening: isRecording,
     transcript,
     currentSpeaker,
+    toggleSpeaker,
     startRecording,
     stopRecording,
     getCurrentTranscript,

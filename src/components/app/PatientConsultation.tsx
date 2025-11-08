@@ -75,15 +75,12 @@ const PatientConsultation = () => {
     transcript,
     isListening,
     currentSpeaker: detectedSpeaker,
+    toggleSpeaker,
     startRecording: startVoiceRecording,
     stopRecording: stopVoiceRecording,
     error: voiceError
   } = useVoiceRecording({
-    language: selectedLanguage,
-    onSpeakerDetected: (speaker) => {
-      setCurrentSpeaker(speaker);
-      console.log("Speaker detected:", speaker);
-    }
+    language: selectedLanguage
   });
 
   
@@ -96,10 +93,10 @@ const PatientConsultation = () => {
       const newText = transcript.substring(lastTranscriptLength.current);
       if (newText.trim()) {
         setConversationTranscript(prev => {
-          if (prev.length === 0 || lastSpeaker.current !== currentSpeaker) {
-            lastSpeaker.current = currentSpeaker;
+          if (prev.length === 0 || lastSpeaker.current !== detectedSpeaker) {
+            lastSpeaker.current = detectedSpeaker;
             return [...prev, {
-              speaker: currentSpeaker,
+              speaker: detectedSpeaker,
               text: newText,
               timestamp: Date.now()
             }];
@@ -116,7 +113,7 @@ const PatientConsultation = () => {
         lastTranscriptLength.current = transcript.length;
       }
     }
-  }, [transcript, currentSpeaker, isRecording]);
+  }, [transcript, detectedSpeaker, isRecording]);
 
   useEffect(() => {
     if (transcriptEndRef.current) {
@@ -592,25 +589,53 @@ const PatientConsultation = () => {
                       </Button>
                     </>
                   )}
-                </div>
-                <Button
-                  onClick={isRecording ? handleStopRecording : handleStartRecording}
-                  disabled={isListening && !isRecording}
-                  size="sm"
-                  variant={isRecording ? "destructive" : "default"}
-                >
-                  {isRecording ? (
-                    <>
-                      <Square className="h-4 w-4 mr-2" />
-                      Stop
-                    </>
-                  ) : (
-                    <>
-                      <Mic className="h-4 w-4 mr-2" />
-                      Record
-                    </>
-                  )}
-                </Button>
+                 </div>
+                 <div className="flex items-center gap-2">
+                   {isRecording && (
+                     <div className="flex items-center gap-2 mr-2">
+                       <Button
+                         onClick={toggleSpeaker}
+                         size="sm"
+                         variant="outline"
+                         className={`gap-2 ${
+                           detectedSpeaker === 'doctor' 
+                             ? 'bg-blue-500/10 text-blue-500 border-blue-500/50 hover:bg-blue-500/20' 
+                             : 'bg-green-500/10 text-green-500 border-green-500/50 hover:bg-green-500/20'
+                         }`}
+                       >
+                         {detectedSpeaker === 'doctor' ? (
+                           <>
+                             <Stethoscope className="h-4 w-4" />
+                             Doctor Speaking
+                           </>
+                         ) : (
+                           <>
+                             <User className="h-4 w-4" />
+                             Patient Speaking
+                           </>
+                         )}
+                       </Button>
+                     </div>
+                   )}
+                   <Button
+                     onClick={isRecording ? handleStopRecording : handleStartRecording}
+                     disabled={isListening && !isRecording}
+                     size="sm"
+                     variant={isRecording ? "destructive" : "default"}
+                   >
+                     {isRecording ? (
+                       <>
+                         <Square className="h-4 w-4 mr-2" />
+                         Stop
+                       </>
+                     ) : (
+                       <>
+                         <Mic className="h-4 w-4 mr-2" />
+                         Record
+                       </>
+                     )}
+                   </Button>
+                 </div>
               </div>
             </Card>
 
@@ -893,7 +918,7 @@ const PatientConsultation = () => {
                         Click "Record" to begin transcribing the conversation...
                       </p>
                       <p className="text-xs text-muted-foreground mt-2">
-                        Speaker will be automatically detected based on voice
+                        Use the speaker toggle button while recording to switch between doctor and patient
                       </p>
                     </div>
                   )}
