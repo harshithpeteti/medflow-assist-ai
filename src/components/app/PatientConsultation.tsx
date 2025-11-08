@@ -86,6 +86,7 @@ const PatientConsultation = () => {
   
   // Track when transcript changes to add to conversation
   const lastTranscriptLength = useRef(0);
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     if (transcript.length > lastTranscriptLength.current && isRecording) {
@@ -100,6 +101,13 @@ const PatientConsultation = () => {
       }
     }
   }, [transcript, currentSpeaker, isRecording]);
+
+  // Auto-scroll to bottom when new conversation entries are added
+  useEffect(() => {
+    if (transcriptEndRef.current) {
+      transcriptEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [conversationTranscript]);
 
   const handleStartConsultation = () => {
     if (!patientName.trim()) {
@@ -519,7 +527,9 @@ const PatientConsultation = () => {
                 )}
               </div>
             </Card>
-        <Card className="flex-1 flex flex-col overflow-hidden">
+        <Card className={`flex flex-col overflow-hidden transition-all duration-300 ${
+          isRecording ? "flex-[2]" : "flex-1"
+        }`}>
           <div className="p-4 border-b border-border">
             <h2 className="text-xl font-semibold text-foreground">Live Transcription</h2>
           </div>
@@ -590,6 +600,7 @@ const PatientConsultation = () => {
                         </div>
                       </div>
                     ))}
+                    <div ref={transcriptEndRef} />
                   </div>
                 ) : (
                   <p className="text-muted-foreground italic">
