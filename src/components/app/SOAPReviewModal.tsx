@@ -150,27 +150,50 @@ const SOAPReviewModal = ({ open, onClose, soapNote, patientName, patientMRN, pat
                       className={`p-5 bg-muted/30 border-l-4 border-l-${section.color} cursor-pointer hover:bg-muted/50 transition-colors`}
                       onClick={() => setEditingSection(section.key)}
                     >
-                      <div className="text-foreground leading-relaxed space-y-2">
+                      <div className="text-foreground leading-relaxed space-y-3">
                         {editedNote[section.key].split('\n').map((line, idx) => {
-                          if (line.trim().startsWith('•')) {
+                          const trimmedLine = line.trim();
+                          
+                          // Bold headers (text between **)
+                          if (trimmedLine.startsWith('**') && trimmedLine.includes('**')) {
+                            const headerText = trimmedLine.replace(/\*\*/g, '');
                             return (
-                              <div key={idx} className="flex gap-3">
-                                <span className="text-primary font-bold mt-0.5">•</span>
-                                <span className="flex-1">{line.substring(1).trim()}</span>
-                              </div>
+                              <h4 key={idx} className="font-bold text-foreground text-base mt-2">
+                                {headerText}
+                              </h4>
                             );
-                          } else if (line.trim().startsWith('-')) {
+                          }
+                          
+                          // Bullet points with •
+                          if (trimmedLine.startsWith('•')) {
                             return (
-                              <div key={idx} className="flex gap-3 ml-6">
-                                <span className="text-muted-foreground">-</span>
-                                <span className="flex-1 text-sm">{line.substring(1).trim()}</span>
+                              <div key={idx} className="flex gap-3 ml-2">
+                                <span className="text-primary font-bold mt-1 text-lg">•</span>
+                                <span className="flex-1 pt-0.5">{trimmedLine.substring(1).trim()}</span>
                               </div>
                             );
                           }
-                          return line.trim() ? <p key={idx}>{line}</p> : <div key={idx} className="h-1" />;
+                          
+                          // Sub-items with -
+                          if (trimmedLine.startsWith('-')) {
+                            return (
+                              <div key={idx} className="flex gap-3 ml-8">
+                                <span className="text-muted-foreground mt-0.5">-</span>
+                                <span className="flex-1 text-sm">{trimmedLine.substring(1).trim()}</span>
+                              </div>
+                            );
+                          }
+                          
+                          // Empty lines for spacing
+                          if (!trimmedLine) {
+                            return <div key={idx} className="h-2" />;
+                          }
+                          
+                          // Regular paragraph text
+                          return <p key={idx} className="text-sm">{line}</p>;
                         })}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">Click to edit</p>
+                      <p className="text-xs text-muted-foreground mt-4 pt-3 border-t border-border">Click to edit</p>
                     </Card>
                   )}
                 </div>

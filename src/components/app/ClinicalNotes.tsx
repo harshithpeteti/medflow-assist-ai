@@ -224,24 +224,47 @@ const ClinicalNotes = () => {
                   </div>
                   
                   <Card className="p-5 bg-muted/30 border-l-4 border-l-primary">
-                    <div className="text-foreground leading-relaxed space-y-2">
+                    <div className="text-foreground leading-relaxed space-y-3">
                       {section.content.split('\n').map((line, lineIdx) => {
-                        if (line.trim().startsWith('•')) {
+                        const trimmedLine = line.trim();
+                        
+                        // Bold headers (text between **)
+                        if (trimmedLine.startsWith('**') && trimmedLine.includes('**')) {
+                          const headerText = trimmedLine.replace(/\*\*/g, '');
                           return (
-                            <div key={lineIdx} className="flex gap-3">
-                              <span className="text-primary font-bold mt-0.5">•</span>
-                              <span className="flex-1">{line.substring(1).trim()}</span>
-                            </div>
+                            <h4 key={lineIdx} className="font-bold text-foreground text-base mt-2">
+                              {headerText}
+                            </h4>
                           );
-                        } else if (line.trim().startsWith('-')) {
+                        }
+                        
+                        // Bullet points with •
+                        if (trimmedLine.startsWith('•')) {
                           return (
-                            <div key={lineIdx} className="flex gap-3 ml-6">
-                              <span className="text-muted-foreground">-</span>
-                              <span className="flex-1 text-sm">{line.substring(1).trim()}</span>
+                            <div key={lineIdx} className="flex gap-3 ml-2">
+                              <span className="text-primary font-bold mt-1 text-lg">•</span>
+                              <span className="flex-1 pt-0.5">{trimmedLine.substring(1).trim()}</span>
                             </div>
                           );
                         }
-                        return line.trim() ? <p key={lineIdx}>{line}</p> : <div key={lineIdx} className="h-1" />;
+                        
+                        // Sub-items with -
+                        if (trimmedLine.startsWith('-')) {
+                          return (
+                            <div key={lineIdx} className="flex gap-3 ml-8">
+                              <span className="text-muted-foreground mt-0.5">-</span>
+                              <span className="flex-1 text-sm">{trimmedLine.substring(1).trim()}</span>
+                            </div>
+                          );
+                        }
+                        
+                        // Empty lines for spacing
+                        if (!trimmedLine) {
+                          return <div key={lineIdx} className="h-2" />;
+                        }
+                        
+                        // Regular paragraph text
+                        return <p key={lineIdx} className="text-sm">{line}</p>;
                       })}
                     </div>
                   </Card>
