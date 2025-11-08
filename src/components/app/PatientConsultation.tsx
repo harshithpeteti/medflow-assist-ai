@@ -26,6 +26,7 @@ import PreviousVisitsModal from "./PreviousVisitsModal";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useVoiceRecording } from "@/hooks/useVoiceRecording";
+import { useVoiceAnalysis } from "@/hooks/useVoiceAnalysis";
 
 interface DetectedTask {
   id: string;
@@ -65,48 +66,36 @@ const PatientConsultation = () => {
     stopRecording: stopVoiceRecording,
     error: voiceError
   } = useVoiceRecording();
+
+  const { setupAnalyzer, analyzePitch, cleanup: cleanupAnalyzer } = useVoiceAnalysis();
   
   const lastTranscriptLength = useRef(0);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const lastSpeaker = useRef<"Doctor" | "Patient">("Doctor");
+  const analysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
     if (transcript.length > lastTranscriptLength.current && isRecording) {
       const newText = transcript.substring(lastTranscriptLength.current);
       if (newText.trim()) {
-        if (lastSpeaker.current !== currentSpeaker) {
-          setConversationTranscript(prev => [...prev, {
-            speaker: currentSpeaker,
-            text: newText,
-            timestamp: Date.now()
-          }]);
-          lastSpeaker.current = currentSpeaker;
-        } else {
-          setConversationTranscript(prev => {
-            if (prev.length === 0) {
-              return [{
-                speaker: currentSpeaker,
-                text: newText,
-                timestamp: Date.now()
-              }];
-            }
-            const updated = [...prev];
-            const lastEntry = updated[updated.length - 1];
-            if (lastEntry.speaker === currentSpeaker) {
-              updated[updated.length - 1] = {
-                ...lastEntry,
-                text: lastEntry.text + " " + newText
-              };
-            } else {
-              updated.push({
-                speaker: currentSpeaker,
-                text: newText,
-                timestamp: Date.now()
-              });
-            }
-            return updated;
-          });
-        }
+        setConversationTranscript(prev => {
+          if (prev.length === 0 || lastSpeaker.current !== currentSpeaker) {
+            lastSpeaker.current = currentSpeaker;
+            return [...prev, {
+              speaker: currentSpeaker,
+              text: newText,
+              timestamp: Date.now()
+            }];
+          }
+          
+          const updated = [...prev];
+          const lastEntry = updated[updated.length - 1];
+          updated[updated.length - 1] = {
+            ...lastEntry,
+            text: lastEntry.text + " " + newText
+          };
+          return updated;
+        });
         lastTranscriptLength.current = transcript.length;
       }
     }
@@ -201,16 +190,50 @@ const PatientConsultation = () => {
       toast.error("Please start a consultation first");
       return;
     }
-    setIsRecording(true);
-    setConversationTranscript([]);
-    lastTranscriptLength.current = 0;
-    lastSpeaker.current = currentSpeaker;
-    await startVoiceRecording();
-    toast.success("Recording started - Toggle speaker as conversation switches");
+    
+    try {
+      setIsRecording(true);
+      setConversationTranscript([]);
+      lastTranscriptLength.current = 0;
+      lastSpeaker.current = "Doctor";
+      setCurrentSpeaker("Doctor");
+      
+      // Get microphone access and setup voice analysis
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setupAnalyzer(stream);
+      
+      // Start voice pitch analysis for automatic speaker detection
+      analysisIntervalRef.current = setInterval(() => {
+        const { isLowPitch, confidence } = analyzePitch();
+        
+        // Only switch if confidence is high enough
+        if (confidence > 0.3) {
+          const detectedSpeaker: "Doctor" | "Patient" = isLowPitch ? "Doctor" : "Patient";
+          if (detectedSpeaker !== currentSpeaker) {
+            setCurrentSpeaker(detectedSpeaker);
+          }
+        }
+      }, 500); // Analyze every 500ms
+      
+      await startVoiceRecording();
+      toast.success("Recording started - Speaker detection active");
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      toast.error("Failed to start recording");
+      setIsRecording(false);
+    }
   };
 
   const handleStopRecording = async () => {
     setIsRecording(false);
+    
+    // Cleanup voice analysis
+    if (analysisIntervalRef.current) {
+      clearInterval(analysisIntervalRef.current);
+      analysisIntervalRef.current = null;
+    }
+    cleanupAnalyzer();
+    
     await stopVoiceRecording();
     toast.success("Recording stopped - Analyzing consultation...");
     
@@ -505,79 +528,77 @@ const PatientConsultation = () => {
                 <div className="mx-4 mt-4 flex items-center justify-between gap-2 text-sm bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/20 p-3 rounded-lg">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    <span className="font-medium text-foreground">Recording - Click speaker to switch</span>
+                    <span className="font-medium text-foreground">🎙️ Recording - Auto-detecting speaker</span>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={currentSpeaker === "Doctor" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setCurrentSpeaker("Doctor");
-                        toast.info("Now recording: Doctor");
-                      }}
-                      className="h-7 gap-1"
-                    >
-                      <Stethoscope className="h-3 w-3" />
-                      Doctor
-                    </Button>
-                    <Button
-                      variant={currentSpeaker === "Patient" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setCurrentSpeaker("Patient");
-                        toast.info("Now recording: Patient");
-                      }}
-                      className="h-7 gap-1"
-                    >
-                      <User className="h-3 w-3" />
-                      Patient
-                    </Button>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="gap-1">
+                      {currentSpeaker === "Doctor" ? (
+                        <>
+                          <Stethoscope className="h-3 w-3" />
+                          Doctor
+                        </>
+                      ) : (
+                        <>
+                          <User className="h-3 w-3" />
+                          Patient
+                        </>
+                      )}
+                    </Badge>
                   </div>
                 </div>
               )}
 
-              <ScrollArea className="flex-1 p-4">
-                {conversationTranscript.length > 0 ? (
-                  <div className="space-y-4">
-                    {conversationTranscript.map((entry, idx) => (
-                      <div key={idx} className={`flex gap-3 ${entry.speaker === "Doctor" ? "justify-start" : "justify-end"}`}>
-                        <div className={`flex gap-2 max-w-[85%] ${entry.speaker === "Patient" ? "flex-row-reverse" : ""}`}>
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            entry.speaker === "Doctor" 
-                              ? "bg-blue-500/10 text-blue-500" 
-                              : "bg-green-500/10 text-green-500"
-                          }`}>
-                            {entry.speaker === "Doctor" ? (
-                              <Stethoscope className="h-4 w-4" />
-                            ) : (
-                              <User className="h-4 w-4" />
-                            )}
-                          </div>
-                          <div className={`rounded-lg p-3 ${
-                            entry.speaker === "Doctor"
-                              ? "bg-blue-500/10 border border-blue-500/20"
-                              : "bg-green-500/10 border border-green-500/20"
-                          }`}>
-                            <p className="text-xs font-semibold mb-1 text-muted-foreground">
-                              {entry.speaker}
-                            </p>
-                            <p className="text-sm text-foreground leading-relaxed">{entry.text}</p>
+              <ScrollArea className="flex-1 p-4 scroll-smooth">
+                <div className="min-h-full">
+                  {conversationTranscript.length > 0 ? (
+                    <div className="space-y-4 pb-4">
+                      {conversationTranscript.map((entry, idx) => (
+                        <div 
+                          key={idx} 
+                          className={`flex gap-3 animate-fade-in ${entry.speaker === "Doctor" ? "justify-start" : "justify-end"}`}
+                          style={{ animationDelay: `${idx * 50}ms` }}
+                        >
+                          <div className={`flex gap-2 max-w-[85%] ${entry.speaker === "Patient" ? "flex-row-reverse" : ""}`}>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                              entry.speaker === "Doctor" 
+                                ? "bg-blue-500/10 text-blue-500" 
+                                : "bg-green-500/10 text-green-500"
+                            }`}>
+                              {entry.speaker === "Doctor" ? (
+                                <Stethoscope className="h-4 w-4" />
+                              ) : (
+                                <User className="h-4 w-4" />
+                              )}
+                            </div>
+                            <div className={`rounded-lg p-3 ${
+                              entry.speaker === "Doctor"
+                                ? "bg-blue-500/10 border border-blue-500/20"
+                                : "bg-green-500/10 border border-green-500/20"
+                            }`}>
+                              <p className="text-xs font-semibold mb-1 text-muted-foreground">
+                                {entry.speaker}
+                              </p>
+                              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{entry.text}</p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                    <div ref={transcriptEndRef} />
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                    <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
-                      <Mic className="h-8 w-8 text-muted-foreground" />
+                      ))}
+                      <div ref={transcriptEndRef} className="h-1" />
                     </div>
-                    <p className="text-muted-foreground italic">
-                      Click "Record" to begin transcribing the conversation...
-                    </p>
-                  </div>
-                )}
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                      <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+                        <Mic className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                      <p className="text-muted-foreground italic">
+                        Click "Record" to begin transcribing the conversation...
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Speaker will be automatically detected based on voice
+                      </p>
+                    </div>
+                  )}
+                </div>
               </ScrollArea>
             </Card>
           </div>
