@@ -1,1 +1,7 @@
 project_id = "hcjwjnabysexihsgqffg"
+
+[functions.detect-medical-tasks]
+verify_jwt = false
+
+[functions.generate-soap-note]
+verify_jwt = false

@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mic, MicOff, Save, Search, User, AlertCircle, Beaker, Pill, UserPlus, Clock, Activity, Syringe, FileText as FileTextIcon, Stethoscope, Plus } from "lucide-react";
+import { Mic, MicOff, Save, AlertCircle, Beaker, Pill, UserPlus, Activity, Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useVoiceRecording } from "@/hooks/useVoiceRecording";
 import TaskReviewModal from "./TaskReviewModal";
 import {
   Dialog,
@@ -32,71 +32,121 @@ interface DetectedTask {
   description: string;
   reason: string;
   details: any;
+  urgency?: string;
   status: "pending" | "reviewed" | "sent";
   timestamp: string;
 }
 
+interface SoapNote {
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+}
+
 const PatientConsultation = () => {
-  const [isRecording, setIsRecording] = useState(false);
   const [selectedTask, setSelectedTask] = useState<DetectedTask | null>(null);
   const [conversationEnded, setConversationEnded] = useState(false);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskType, setNewTaskType] = useState<DetectedTask["type"]>("Lab Order");
   const [newTaskDescription, setNewTaskDescription] = useState("");
-  const [liveTranscript, setLiveTranscript] = useState("Patient: I've been having chest pain for the past few days...\n\nDoctor: Can you describe the pain? Is it sharp or dull?\n\nPatient: It's more of a dull ache, especially when I climb stairs.\n\nDoctor: Any shortness of breath with it?\n\nPatient: Yes, I get a bit winded...");
+  const [detectedTasks, setDetectedTasks] = useState<DetectedTask[]>([]);
+  const [soapNote, setSoapNote] = useState<SoapNote | null>(null);
+  const [isDetectingTasks, setIsDetectingTasks] = useState(false);
+  const [isGeneratingSOAP, setIsGeneratingSOAP] = useState(false);
   const { toast } = useToast();
 
-  const handleStartRecording = () => {
-    setIsRecording(true);
-    toast({
-      title: "Recording Started",
-      description: "Listening to consultation...",
-    });
+  const { isRecording, transcript, startRecording, stopRecording } = useVoiceRecording({
+    onTranscriptionUpdate: (text) => {
+      // Auto-detect tasks every 30 seconds of new speech
+      if (text.length > 100 && !isDetectingTasks) {
+        detectTasksFromTranscript(text);
+      }
+    },
+  });
+
+  const detectTasksFromTranscript = async (text: string) => {
+    if (!text || text.trim().length === 0) return;
+    
+    setIsDetectingTasks(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("detect-medical-tasks", {
+        body: { transcription: text },
+      });
+
+      if (error) throw error;
+
+      if (data?.tasks && data.tasks.length > 0) {
+        setDetectedTasks(prev => {
+          const existingIds = new Set(prev.map(t => t.description));
+          const newTasks = data.tasks.filter((t: DetectedTask) => 
+            !existingIds.has(t.description)
+          );
+          return [...prev, ...newTasks];
+        });
+      }
+    } catch (error: any) {
+      console.error("Error detecting tasks:", error);
+      if (error.message?.includes("Rate limit")) {
+        toast({
+          title: "Rate Limit",
+          description: "AI task detection temporarily paused. Please slow down.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsDetectingTasks(false);
+    }
   };
 
-  const soapNote = {
-    subjective: "Patient reports chest discomfort and shortness of breath for the past three days. Symptoms worsen with exertion, particularly when climbing stairs. No associated fever or cough reported.",
-    objective: "Vital signs: BP 140/90, HR 88, RR 16, SpO2 96% on room air. Cardiovascular exam reveals regular rate and rhythm, no murmurs. Chest clear to auscultation bilaterally.",
-    assessment: "1. Chest pain - possible cardiac vs musculoskeletal etiology\n2. Hypertension - stage 1\n3. Shortness of breath - likely related to above",
-    plan: "1. Order CBC, lipid panel, and troponin levels to rule out cardiac causes\n2. Start Aspirin 81mg daily for cardiovascular protection\n3. ECG today\n4. Follow up in 1 week or sooner if symptoms worsen\n5. Advised patient on warning signs requiring immediate ER visit"
+  const generateSOAPNote = async () => {
+    if (!transcript || transcript.trim().length === 0) {
+      toast({
+        title: "No Content",
+        description: "No transcription available to generate SOAP note.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingSOAP(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-soap-note", {
+        body: { transcription: transcript },
+      });
+
+      if (error) throw error;
+
+      if (data?.soapNote) {
+        setSoapNote(data.soapNote);
+        toast({
+          title: "SOAP Note Generated",
+          description: "Clinical documentation is ready for review.",
+        });
+      }
+    } catch (error: any) {
+      console.error("Error generating SOAP note:", error);
+      toast({
+        title: "Generation Failed",
+        description: error.message || "Failed to generate SOAP note.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingSOAP(false);
+    }
   };
 
-  const detectedTasks: DetectedTask[] = [
-    { 
-      id: "1",
-      type: "Lab Order", 
-      description: "CBC, Lipid Panel, Troponin levels", 
-      reason: "Patient presenting with chest discomfort and shortness of breath",
-      details: {
-        tests: ["Complete Blood Count", "Lipid Panel", "Troponin levels"],
-        urgency: "Routine",
-      },
-      status: "pending",
-      timestamp: "10:35"
-    },
-    { 
-      id: "2",
-      type: "Prescription", 
-      description: "Aspirin 81mg daily", 
-      reason: "Preventive measure due to chest discomfort",
-      details: {
-        medication: "Aspirin",
-        dosage: "81mg",
-        frequency: "Once daily",
-        duration: "30 days",
-      },
-      status: "pending",
-      timestamp: "10:36"
-    },
-  ];
+  const handleStartRecording = async () => {
+    await startRecording();
+  };
 
-  const handleEndConsultation = () => {
-    setIsRecording(false);
+  const handleEndConsultation = async () => {
+    stopRecording();
     setConversationEnded(true);
-    toast({
-      title: "Consultation Ended",
-      description: "SOAP note generated successfully",
-    });
+    
+    // Generate final tasks and SOAP note
+    await detectTasksFromTranscript(transcript);
+    await generateSOAPNote();
   };
 
   const handleAddTask = () => {
@@ -280,38 +330,9 @@ const PatientConsultation = () => {
               </div>
             ) : isRecording ? (
               <div className="space-y-3 pr-4">
-                <div className="flex items-start gap-3">
-                  <Badge variant="secondary" className="mt-1">Patient</Badge>
-                  <p className="text-sm text-foreground flex-1">
-                    I've been having chest pain for the past few days...
-                  </p>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <Badge variant="default" className="mt-1">Doctor</Badge>
-                  <p className="text-sm text-foreground flex-1">
-                    Can you describe the pain? Is it sharp or dull?
-                  </p>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <Badge variant="secondary" className="mt-1">Patient</Badge>
-                  <p className="text-sm text-foreground flex-1">
-                    It's more of a dull ache, especially when I climb stairs.
-                  </p>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <Badge variant="default" className="mt-1">Doctor</Badge>
-                  <p className="text-sm text-foreground flex-1">
-                    Any shortness of breath with it?
-                  </p>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <Badge variant="secondary" className="mt-1">Patient</Badge>
-                  <p className="text-sm text-foreground flex-1">
-                    Yes, I get a bit winded...
+                <div className="bg-muted/30 p-4 rounded-lg">
+                  <p className="text-sm text-foreground whitespace-pre-wrap">
+                    {transcript || "Listening..."}
                   </p>
                 </div>
 
@@ -321,30 +342,46 @@ const PatientConsultation = () => {
                     <span className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
                     <span className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
                   </div>
-                  <p className="text-xs">Listening...</p>
+                  <p className="text-xs">Listening and detecting tasks...</p>
+                  {isDetectingTasks && (
+                    <Loader2 className="h-3 w-3 animate-spin ml-2" />
+                  )}
                 </div>
               </div>
             ) : (
               <div className="space-y-4 pr-4">
-                <div className="border-l-4 border-primary pl-4 py-2">
-                  <h4 className="font-semibold text-foreground mb-2">Subjective</h4>
-                  <p className="text-sm text-foreground">{soapNote.subjective}</p>
-                </div>
-                
-                <div className="border-l-4 border-accent pl-4 py-2">
-                  <h4 className="font-semibold text-foreground mb-2">Objective</h4>
-                  <p className="text-sm text-foreground">{soapNote.objective}</p>
-                </div>
-                
-                <div className="border-l-4 border-primary pl-4 py-2">
-                  <h4 className="font-semibold text-foreground mb-2">Assessment</h4>
-                  <p className="text-sm text-foreground whitespace-pre-line">{soapNote.assessment}</p>
-                </div>
-                
-                <div className="border-l-4 border-accent pl-4 py-2">
-                  <h4 className="font-semibold text-foreground mb-2">Plan</h4>
-                  <p className="text-sm text-foreground whitespace-pre-line">{soapNote.plan}</p>
-                </div>
+                {isGeneratingSOAP ? (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                    <p className="text-muted-foreground">Generating SOAP note...</p>
+                  </div>
+                ) : soapNote ? (
+                  <>
+                    <div className="border-l-4 border-primary pl-4 py-2">
+                      <h4 className="font-semibold text-foreground mb-2">Subjective</h4>
+                      <p className="text-sm text-foreground">{soapNote.subjective}</p>
+                    </div>
+                    
+                    <div className="border-l-4 border-accent pl-4 py-2">
+                      <h4 className="font-semibold text-foreground mb-2">Objective</h4>
+                      <p className="text-sm text-foreground">{soapNote.objective}</p>
+                    </div>
+                    
+                    <div className="border-l-4 border-primary pl-4 py-2">
+                      <h4 className="font-semibold text-foreground mb-2">Assessment</h4>
+                      <p className="text-sm text-foreground whitespace-pre-line">{soapNote.assessment}</p>
+                    </div>
+                    
+                    <div className="border-l-4 border-accent pl-4 py-2">
+                      <h4 className="font-semibold text-foreground mb-2">Plan</h4>
+                      <p className="text-sm text-foreground whitespace-pre-line">{soapNote.plan}</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                    <p>No SOAP note generated yet</p>
+                  </div>
+                )}
               </div>
             )}
           </ScrollArea>
