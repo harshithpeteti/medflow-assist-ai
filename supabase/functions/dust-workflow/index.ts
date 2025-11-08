@@ -15,8 +15,21 @@ serve(async (req) => {
     const { workflowType, payload } = await req.json();
     
     const DUST_API_KEY = Deno.env.get('DUST_API_KEY');
-    if (!DUST_API_KEY) {
-      throw new Error('DUST_API_KEY is not configured');
+    const DUST_WORKSPACE_ID = Deno.env.get('DUST_WORKSPACE_ID');
+    const DUST_ENABLED = Deno.env.get('DUST_ENABLED') === 'true';
+
+    // If Dust is not configured, return a graceful fallback
+    if (!DUST_API_KEY || !DUST_WORKSPACE_ID || !DUST_ENABLED) {
+      console.log('Dust not configured, returning fallback response');
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          fallback: true,
+          message: 'Dust integration not configured - using basic task management',
+          result: payload // Return original payload unchanged
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log(`Processing Dust workflow: ${workflowType}`);
@@ -26,7 +39,7 @@ serve(async (req) => {
     switch (workflowType) {
       case 'optimize-tasks': {
         // Optimize and prioritize medical tasks
-        dustResponse = await fetch('https://dust.tt/api/v1/w/YOUR_WORKSPACE/apps/YOUR_APP/runs', {
+        dustResponse = await fetch(`https://dust.tt/api/v1/w/${DUST_WORKSPACE_ID}/apps/task-optimizer/runs`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${DUST_API_KEY}`,
@@ -52,7 +65,7 @@ serve(async (req) => {
 
       case 'task-routing': {
         // Route tasks to appropriate departments/specialists
-        dustResponse = await fetch('https://dust.tt/api/v1/w/YOUR_WORKSPACE/apps/task-router/runs', {
+        dustResponse = await fetch(`https://dust.tt/api/v1/w/${DUST_WORKSPACE_ID}/apps/task-router/runs`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${DUST_API_KEY}`,
@@ -83,7 +96,7 @@ serve(async (req) => {
 
       case 'smart-followup': {
         // Generate intelligent follow-up recommendations
-        dustResponse = await fetch('https://dust.tt/api/v1/w/YOUR_WORKSPACE/apps/followup-agent/runs', {
+        dustResponse = await fetch(`https://dust.tt/api/v1/w/${DUST_WORKSPACE_ID}/apps/followup-agent/runs`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${DUST_API_KEY}`,
@@ -119,7 +132,7 @@ serve(async (req) => {
 
       case 'validate-prescription': {
         // Validate prescriptions for drug interactions, dosage, etc.
-        dustResponse = await fetch('https://dust.tt/api/v1/w/YOUR_WORKSPACE/apps/prescription-validator/runs', {
+        dustResponse = await fetch(`https://dust.tt/api/v1/w/${DUST_WORKSPACE_ID}/apps/prescription-validator/runs`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${DUST_API_KEY}`,

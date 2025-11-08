@@ -235,9 +235,9 @@ const PatientConsultation = () => {
         }
       });
 
-      if (error) {
-        console.error("Dust optimization error:", error);
-        setDustWorkflowStatus('error');
+      if (error || data?.fallback) {
+        console.log("Dust not configured, using basic task management");
+        setDustWorkflowStatus('idle');
         return { success: false, tasks };
       }
 
