@@ -1,11 +1,9 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Activity, FileText, Clock, CheckCircle2, AlertCircle, TrendingUp, Mic, Hospital, BedDouble } from "lucide-react";
-
-type ConsultationMode = "outpatient" | "inpatient";
+import { Activity, FileText, Clock, CheckCircle2, AlertCircle, TrendingUp, Mic, Hospital } from "lucide-react";
 
 interface DashboardOverviewProps {
-  onStartConsultation: (mode: ConsultationMode) => void;
+  onStartConsultation: () => void;
 }
 
 const DashboardOverview = ({ onStartConsultation }: DashboardOverviewProps) => {
@@ -56,69 +54,19 @@ const DashboardOverview = ({ onStartConsultation }: DashboardOverviewProps) => {
     <div className="space-y-8 animate-fade-in">
       {/* Welcome Header */}
       <div className="bg-gradient-primary rounded-2xl p-8 text-primary-foreground shadow-elevated">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold">Welcome back, Dr. Mitchell</h1>
-          <p className="text-primary-foreground/90">Select consultation type to begin your workflow</p>
-        </div>
-      </div>
-
-      {/* Consultation Mode Selection */}
-      <div>
-        <h2 className="text-2xl font-bold text-foreground mb-4">Start New Consultation</h2>
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Outpatient Card */}
-          <Card 
-            className="p-8 border-2 hover:border-primary hover:shadow-lg transition-all cursor-pointer group"
-            onClick={() => onStartConsultation("outpatient")}
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold">Welcome back, Dr. Mitchell</h1>
+            <p className="text-primary-foreground/90">Ready to start your next consultation</p>
+          </div>
+          <Button 
+            className="gap-2 bg-background text-primary hover:bg-background/90 shadow-lg" 
+            size="lg"
+            onClick={onStartConsultation}
           >
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center">
-                  <Hospital className="h-8 w-8 text-primary-foreground" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">
-                    🏥 Outpatient
-                  </h3>
-                </div>
-              </div>
-
-              <Button 
-                className="w-full gap-2 bg-gradient-primary hover:opacity-90" 
-                size="lg"
-              >
-                <Mic className="h-5 w-5" />
-                Start Consultation
-              </Button>
-            </div>
-          </Card>
-
-          {/* Inpatient Card */}
-          <Card 
-            className="p-8 border-2 hover:border-primary hover:shadow-lg transition-all cursor-pointer group"
-            onClick={() => onStartConsultation("inpatient")}
-          >
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center">
-                  <BedDouble className="h-8 w-8 text-primary-foreground" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">
-                    🛏️ Inpatient
-                  </h3>
-                </div>
-              </div>
-
-              <Button 
-                className="w-full gap-2 bg-gradient-primary hover:opacity-90" 
-                size="lg"
-              >
-                <Mic className="h-5 w-5" />
-                Begin Rounds
-              </Button>
-            </div>
-          </Card>
+            <Mic className="h-5 w-5" />
+            Start Consultation
+          </Button>
         </div>
       </div>
 

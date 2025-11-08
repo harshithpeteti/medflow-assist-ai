@@ -10,12 +10,6 @@ import { Mic, MicOff, Save, Search, User, AlertCircle, Beaker, Pill, UserPlus, C
 import { useToast } from "@/hooks/use-toast";
 import TaskReviewModal from "./TaskReviewModal";
 
-type ConsultationMode = "outpatient" | "inpatient";
-
-interface PatientConsultationProps {
-  mode: ConsultationMode;
-}
-
 interface DetectedTask {
   id: string;
   type: "Lab Order" | "Prescription" | "Referral" | "Follow-up";
@@ -26,7 +20,7 @@ interface DetectedTask {
   timestamp: string;
 }
 
-const PatientConsultation = ({ mode }: PatientConsultationProps) => {
+const PatientConsultation = () => {
   const [isRecording, setIsRecording] = useState(true);
   const [selectedTask, setSelectedTask] = useState<DetectedTask | null>(null);
   const [conversationEnded, setConversationEnded] = useState(false);
@@ -39,7 +33,7 @@ const PatientConsultation = ({ mode }: PatientConsultationProps) => {
     plan: "1. Order CBC, lipid panel, and troponin levels to rule out cardiac causes\n2. Start Aspirin 81mg daily for cardiovascular protection\n3. ECG today\n4. Follow up in 1 week or sooner if symptoms worsen\n5. Advised patient on warning signs requiring immediate ER visit"
   };
 
-  const outpatientTasks: DetectedTask[] = [
+  const detectedTasks: DetectedTask[] = [
     { 
       id: "1",
       type: "Lab Order", 
@@ -67,49 +61,6 @@ const PatientConsultation = ({ mode }: PatientConsultationProps) => {
       timestamp: "10:36"
     },
   ];
-
-  const inpatientTasks: DetectedTask[] = [
-    { 
-      id: "1",
-      type: "Lab Order", 
-      description: "CBC for tomorrow morning", 
-      reason: "Monitor patient progress during hospital stay",
-      details: {
-        tests: ["Complete Blood Count"],
-        urgency: "Scheduled - Tomorrow AM",
-      },
-      status: "pending",
-      timestamp: "10:35"
-    },
-    { 
-      id: "2",
-      type: "Prescription", 
-      description: "Stop IV antibiotics, start oral meds", 
-      reason: "Patient improving, transition to oral medication",
-      details: {
-        medication: "Oral Antibiotics",
-        action: "Stop IV, Start PO",
-        duration: "Continue for 5 days",
-      },
-      status: "pending",
-      timestamp: "10:36"
-    },
-    { 
-      id: "3",
-      type: "Follow-up", 
-      description: "Monitor vitals every 4 hours", 
-      reason: "Continuous monitoring required during recovery",
-      details: {
-        task: "Vital Signs Monitoring",
-        frequency: "Every 4 hours",
-        assignedTo: "Nursing Staff",
-      },
-      status: "pending",
-      timestamp: "10:37"
-    },
-  ];
-
-  const detectedTasks = mode === "outpatient" ? outpatientTasks : inpatientTasks;
 
   const handleEndConsultation = () => {
     setIsRecording(false);
@@ -149,7 +100,7 @@ const PatientConsultation = ({ mode }: PatientConsultationProps) => {
             </Button>
             <div>
               <h2 className="text-xl font-semibold text-foreground">
-                {mode === "inpatient" ? "🛏️ Inpatient Rounds" : "🏥 Outpatient Consultation"}
+                🏥 Outpatient Consultation
               </h2>
             </div>
           </div>

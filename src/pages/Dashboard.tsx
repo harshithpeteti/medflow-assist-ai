@@ -8,25 +8,20 @@ import DashboardOverview from "@/components/app/DashboardOverview";
 import NurseTaskBoard from "@/components/app/NurseTaskBoard";
 
 type View = "overview" | "consultation" | "notes" | "tasks" | "patients" | "nurse";
-type ConsultationMode = "outpatient" | "inpatient";
 
 const Dashboard = () => {
   const [currentView, setCurrentView] = useState<View>("overview");
-  const [consultationMode, setConsultationMode] = useState<ConsultationMode>("outpatient");
 
   const renderView = () => {
     switch (currentView) {
       case "overview":
         return (
           <DashboardOverview 
-            onStartConsultation={(mode) => {
-              setConsultationMode(mode);
-              setCurrentView("consultation");
-            }} 
+            onStartConsultation={() => setCurrentView("consultation")} 
           />
         );
       case "consultation":
-        return <PatientConsultation mode={consultationMode} />;
+        return <PatientConsultation />;
       case "notes":
         return <ClinicalNotes />;
       case "tasks":
@@ -38,10 +33,7 @@ const Dashboard = () => {
       default:
         return (
           <DashboardOverview 
-            onStartConsultation={(mode) => {
-              setConsultationMode(mode);
-              setCurrentView("consultation");
-            }} 
+            onStartConsultation={() => setCurrentView("consultation")} 
           />
         );
     }
