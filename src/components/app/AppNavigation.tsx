@@ -1,8 +1,8 @@
-import { Activity, LayoutDashboard, FileText, ClipboardList, Users, Settings, LogOut } from "lucide-react";
+import { Activity, LayoutDashboard, FileText, ClipboardList, Users, Settings, LogOut, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-type View = "overview" | "consultation" | "notes" | "tasks" | "patients";
+type View = "overview" | "consultation" | "notes" | "tasks" | "patients" | "nurse";
 
 interface AppNavigationProps {
   currentView: View;
@@ -16,6 +16,7 @@ const AppNavigation = ({ currentView, onViewChange }: AppNavigationProps) => {
     { id: "notes" as View, icon: FileText, label: "Clinical Notes" },
     { id: "tasks" as View, icon: ClipboardList, label: "Tasks & Workflows" },
     { id: "patients" as View, icon: Users, label: "Patients" },
+    { id: "nurse" as View, icon: Stethoscope, label: "Nurse Board" },
   ];
 
   return (

@@ -5,8 +5,9 @@ import ClinicalNotes from "@/components/app/ClinicalNotes";
 import TaskQueue from "@/components/app/TaskQueue";
 import PatientList from "@/components/app/PatientList";
 import DashboardOverview from "@/components/app/DashboardOverview";
+import NurseTaskBoard from "@/components/app/NurseTaskBoard";
 
-type View = "overview" | "consultation" | "notes" | "tasks" | "patients";
+type View = "overview" | "consultation" | "notes" | "tasks" | "patients" | "nurse";
 
 const Dashboard = () => {
   const [currentView, setCurrentView] = useState<View>("patients");
@@ -23,6 +24,8 @@ const Dashboard = () => {
         return <TaskQueue />;
       case "patients":
         return <PatientList />;
+      case "nurse":
+        return <NurseTaskBoard />;
       default:
         return <DashboardOverview onStartConsultation={() => setCurrentView("consultation")} />;
     }

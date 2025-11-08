@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { Mic, MicOff, Save, Search, User, AlertCircle, Beaker, Pill, UserPlus, Clock } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Mic, MicOff, Save, Search, User, AlertCircle, Beaker, Pill, UserPlus, Clock, Activity, Syringe, FileText as FileTextIcon, Stethoscope } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import TaskReviewModal from "./TaskReviewModal";
+
+type ConsultationMode = "outpatient" | "inpatient";
 
 interface DetectedTask {
   id: string;
@@ -25,6 +28,7 @@ const PatientConsultation = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [selectedTask, setSelectedTask] = useState<DetectedTask | null>(null);
   const [chiefComplaint, setChiefComplaint] = useState("");
+  const [mode, setMode] = useState<ConsultationMode>("outpatient");
   const { toast } = useToast();
 
   const transcript = [
@@ -34,7 +38,7 @@ const PatientConsultation = () => {
     { speaker: "Patient", text: "About three days ago. It gets worse when I climb stairs.", time: "10:33" },
   ];
 
-  const detectedTasks: DetectedTask[] = [
+  const outpatientTasks: DetectedTask[] = [
     { 
       id: "1",
       type: "Lab Order", 
@@ -62,6 +66,49 @@ const PatientConsultation = () => {
       timestamp: "10:36"
     },
   ];
+
+  const inpatientTasks: DetectedTask[] = [
+    { 
+      id: "1",
+      type: "Lab Order", 
+      description: "CBC for tomorrow morning", 
+      reason: "Monitor patient progress during hospital stay",
+      details: {
+        tests: ["Complete Blood Count"],
+        urgency: "Scheduled - Tomorrow AM",
+      },
+      status: "pending",
+      timestamp: "10:35"
+    },
+    { 
+      id: "2",
+      type: "Prescription", 
+      description: "Stop IV antibiotics, start oral meds", 
+      reason: "Patient improving, transition to oral medication",
+      details: {
+        medication: "Oral Antibiotics",
+        action: "Stop IV, Start PO",
+        duration: "Continue for 5 days",
+      },
+      status: "pending",
+      timestamp: "10:36"
+    },
+    { 
+      id: "3",
+      type: "Follow-up", 
+      description: "Monitor vitals every 4 hours", 
+      reason: "Continuous monitoring required during recovery",
+      details: {
+        task: "Vital Signs Monitoring",
+        frequency: "Every 4 hours",
+        assignedTo: "Nursing Staff",
+      },
+      status: "pending",
+      timestamp: "10:37"
+    },
+  ];
+
+  const detectedTasks = mode === "outpatient" ? outpatientTasks : inpatientTasks;
 
   const handleStartConsultation = () => {
     if (!patientName.trim()) {
@@ -92,8 +139,14 @@ const PatientConsultation = () => {
       case "Referral":
         return { icon: UserPlus, color: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20" };
       case "Follow-up":
-        return { icon: Clock, color: "text-green-500", bg: "bg-green-500/10", border: "border-green-500/20" };
+        return { icon: Activity, color: "text-green-500", bg: "bg-green-500/10", border: "border-green-500/20" };
     }
+  };
+
+  const getModeDescription = () => {
+    return mode === "outpatient" 
+      ? "Single consultation for labs, prescriptions, and referrals"
+      : "Continuous hospital stay with daily rounds and nurse monitoring";
   };
 
   // Before selecting patient
@@ -111,6 +164,17 @@ const PatientConsultation = () => {
             </div>
 
             <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Consultation Mode</label>
+                <Tabs value={mode} onValueChange={(v) => setMode(v as ConsultationMode)} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="outpatient">🏥 Outpatient</TabsTrigger>
+                    <TabsTrigger value="inpatient">🛏️ Inpatient</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                <p className="text-xs text-muted-foreground mt-2">{getModeDescription()}</p>
+              </div>
+
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">Patient Name</label>
                 <div className="relative">
@@ -204,7 +268,12 @@ const PatientConsultation = () => {
               <User className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-foreground">{patientName}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold text-foreground">{patientName}</h2>
+                <Badge variant={mode === "inpatient" ? "default" : "secondary"} className="text-xs">
+                  {mode === "inpatient" ? "🛏️ Inpatient" : "🏥 Outpatient"}
+                </Badge>
+              </div>
               {chiefComplaint && (
                 <p className="text-sm text-muted-foreground">Chief Complaint: {chiefComplaint}</p>
               )}
