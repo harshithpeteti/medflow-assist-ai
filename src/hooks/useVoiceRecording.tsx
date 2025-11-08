@@ -1,14 +1,10 @@
 import { useState, useRef, useCallback } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
-interface UseVoiceRecordingProps {
-  onTranscriptionUpdate: (text: string) => void;
-}
-
-export const useVoiceRecording = ({ onTranscriptionUpdate }: UseVoiceRecordingProps) => {
+export const useVoiceRecording = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const { toast } = useToast();
+  const [error, setError] = useState<string | null>(null);
   
   const recognitionRef = useRef<any>(null);
   const interimTranscriptRef = useRef("");
@@ -22,11 +18,7 @@ export const useVoiceRecording = ({ onTranscriptionUpdate }: UseVoiceRecordingPr
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       
       if (!SpeechRecognition) {
-        toast({
-          title: "Not Supported",
-          description: "Speech recognition is not supported in this browser. Please use Chrome or Edge.",
-          variant: "destructive",
-        });
+        setError("Speech recognition is not supported in this browser. Please use Chrome or Edge.");
         return;
       }
 
@@ -54,11 +46,7 @@ export const useVoiceRecording = ({ onTranscriptionUpdate }: UseVoiceRecordingPr
         }
 
         if (finalTranscript) {
-          setTranscript(prev => {
-            const updated = prev + finalTranscript;
-            onTranscriptionUpdate(updated);
-            return updated;
-          });
+          setTranscript(prev => prev + finalTranscript);
         }
 
         interimTranscriptRef.current = interimTranscript;
@@ -68,19 +56,11 @@ export const useVoiceRecording = ({ onTranscriptionUpdate }: UseVoiceRecordingPr
         console.error("Speech recognition error:", event.error);
         
         if (event.error === "not-allowed") {
-          toast({
-            title: "Microphone Access Denied",
-            description: "Please allow microphone access to use voice recording.",
-            variant: "destructive",
-          });
+          setError("Microphone access denied. Please allow microphone access.");
         } else if (event.error === "no-speech") {
           console.log("No speech detected, continuing...");
         } else {
-          toast({
-            title: "Recording Error",
-            description: `Error: ${event.error}`,
-            variant: "destructive",
-          });
+          setError(`Recording error: ${event.error}`);
         }
       };
 
@@ -95,33 +75,19 @@ export const useVoiceRecording = ({ onTranscriptionUpdate }: UseVoiceRecordingPr
       recognitionRef.current = recognition;
       recognition.start();
 
-      toast({
-        title: "Recording Started",
-        description: "Listening to consultation...",
-      });
-
     } catch (error) {
       console.error("Error starting recording:", error);
-      toast({
-        title: "Error",
-        description: "Failed to start recording. Please check microphone permissions.",
-        variant: "destructive",
-      });
+      setError("Failed to start recording. Please check microphone permissions.");
     }
-  }, [isRecording, toast, onTranscriptionUpdate]);
+  }, [isRecording]);
 
   const stopRecording = useCallback(() => {
     if (recognitionRef.current) {
       setIsRecording(false);
       recognitionRef.current.stop();
       recognitionRef.current = null;
-      
-      toast({
-        title: "Recording Stopped",
-        description: "Processing consultation...",
-      });
     }
-  }, [toast]);
+  }, []);
 
   const getCurrentTranscript = useCallback(() => {
     return transcript + interimTranscriptRef.current;
@@ -129,9 +95,11 @@ export const useVoiceRecording = ({ onTranscriptionUpdate }: UseVoiceRecordingPr
 
   return {
     isRecording,
+    isListening: isRecording,
     transcript,
     startRecording,
     stopRecording,
     getCurrentTranscript,
+    error,
   };
 };

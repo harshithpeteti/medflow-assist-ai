@@ -2,29 +2,26 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { Mic, MicOff, Save, AlertCircle, Beaker, Pill, UserPlus, Activity, Plus, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { 
+  Mic, 
+  Square, 
+  User,
+  Search,
+  RefreshCw,
+  Loader2,
+  Beaker,
+  Pill,
+  UserPlus,
+  Activity
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { useVoiceRecording } from "@/hooks/useVoiceRecording";
-import TaskReviewModal from "./TaskReviewModal";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface DetectedTask {
   id: string;
@@ -37,38 +34,88 @@ interface DetectedTask {
   timestamp: string;
 }
 
-interface SoapNote {
-  subjective: string;
-  objective: string;
-  assessment: string;
-  plan: string;
-}
-
 const PatientConsultation = () => {
-  const [selectedTask, setSelectedTask] = useState<DetectedTask | null>(null);
-  const [conversationEnded, setConversationEnded] = useState(false);
-  const [isAddingTask, setIsAddingTask] = useState(false);
-  const [newTaskType, setNewTaskType] = useState<DetectedTask["type"]>("Lab Order");
-  const [newTaskDescription, setNewTaskDescription] = useState("");
+  const [selectedPatient, setSelectedPatient] = useState<number | null>(1);
+  const [patientSearch, setPatientSearch] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
   const [detectedTasks, setDetectedTasks] = useState<DetectedTask[]>([]);
-  const [soapNote, setSoapNote] = useState<SoapNote | null>(null);
-  const [isDetectingTasks, setIsDetectingTasks] = useState(false);
+  const [soapNote, setSoapNote] = useState("");
   const [isGeneratingSOAP, setIsGeneratingSOAP] = useState(false);
-  const { toast } = useToast();
+  const [isReturnVisit, setIsReturnVisit] = useState(false);
+  const [recommendedQuestions, setRecommendedQuestions] = useState<string[]>([]);
 
-  const { isRecording, transcript, startRecording, stopRecording } = useVoiceRecording({
-    onTranscriptionUpdate: (text) => {
-      // Auto-detect tasks every 30 seconds of new speech
-      if (text.length > 100 && !isDetectingTasks) {
-        detectTasksFromTranscript(text);
-      }
+  const { 
+    transcript,
+    isListening,
+    startRecording: startVoiceRecording,
+    stopRecording: stopVoiceRecording,
+    error: voiceError
+  } = useVoiceRecording();
+
+  // Mock patient data
+  const patients = [
+    {
+      id: 1,
+      name: "Emma Wilson",
+      age: 48,
+      mrn: "EMW-2024-1142",
+      lastVisit: "Dec 20, 2024",
+      visitCount: 3,
+      conditions: ["Hypertension", "Type 2 Diabetes"],
     },
-  });
+    {
+      id: 2,
+      name: "John Davis",
+      age: 62,
+      mrn: "JDA-2023-0892",
+      lastVisit: "Jan 10, 2025",
+      visitCount: 8,
+      conditions: ["Hypertension"],
+    },
+    {
+      id: 3,
+      name: "Sarah Johnson",
+      age: 35,
+      mrn: "SJO-2024-0234",
+      lastVisit: "Never",
+      visitCount: 0,
+      conditions: [],
+    },
+  ];
+
+  const currentPatient = patients.find(p => p.id === selectedPatient);
+
+  useEffect(() => {
+    if (voiceError) {
+      toast.error(voiceError);
+    }
+  }, [voiceError]);
+
+  // Set return visit status when patient is selected
+  useEffect(() => {
+    if (currentPatient && currentPatient.visitCount > 0) {
+      setIsReturnVisit(true);
+    } else {
+      setIsReturnVisit(false);
+    }
+  }, [currentPatient]);
+
+  // Auto-detect tasks every 30 seconds
+  useEffect(() => {
+    if (!isRecording || !transcript) return;
+
+    const interval = setInterval(() => {
+      if (transcript.length > 100) {
+        detectTasksFromTranscript(transcript);
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [isRecording, transcript]);
 
   const detectTasksFromTranscript = async (text: string) => {
     if (!text || text.trim().length === 0) return;
-    
-    setIsDetectingTasks(true);
+
     try {
       const { data, error } = await supabase.functions.invoke("detect-medical-tasks", {
         body: { transcription: text },
@@ -88,24 +135,14 @@ const PatientConsultation = () => {
     } catch (error: any) {
       console.error("Error detecting tasks:", error);
       if (error.message?.includes("Rate limit")) {
-        toast({
-          title: "Rate Limit",
-          description: "AI task detection temporarily paused. Please slow down.",
-          variant: "destructive",
-        });
+        toast.error("AI task detection temporarily paused. Please slow down.");
       }
-    } finally {
-      setIsDetectingTasks(false);
     }
   };
 
   const generateSOAPNote = async () => {
     if (!transcript || transcript.trim().length === 0) {
-      toast({
-        title: "No Content",
-        description: "No transcription available to generate SOAP note.",
-        variant: "destructive",
-      });
+      toast.error("No transcription available to generate SOAP note.");
       return;
     }
 
@@ -119,338 +156,258 @@ const PatientConsultation = () => {
 
       if (data?.soapNote) {
         setSoapNote(data.soapNote);
-        toast({
-          title: "SOAP Note Generated",
-          description: "Clinical documentation is ready for review.",
-        });
+        toast.success("SOAP note generated successfully");
       }
     } catch (error: any) {
       console.error("Error generating SOAP note:", error);
-      toast({
-        title: "Generation Failed",
-        description: error.message || "Failed to generate SOAP note.",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to generate SOAP note");
     } finally {
       setIsGeneratingSOAP(false);
     }
   };
 
   const handleStartRecording = async () => {
-    await startRecording();
-  };
-
-  const handleEndConsultation = async () => {
-    stopRecording();
-    setConversationEnded(true);
-    
-    // Generate final tasks and SOAP note
-    await detectTasksFromTranscript(transcript);
-    await generateSOAPNote();
-  };
-
-  const handleAddTask = () => {
-    if (!newTaskDescription.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a task description",
-        variant: "destructive",
-      });
+    if (!selectedPatient) {
+      toast.error("Please select a patient first");
       return;
     }
-
-    toast({
-      title: "Task Added",
-      description: `${newTaskType} has been added to the queue`,
-    });
-    setIsAddingTask(false);
-    setNewTaskDescription("");
-    setNewTaskType("Lab Order");
+    setIsRecording(true);
+    await startVoiceRecording();
+    toast.success("Recording started");
   };
 
-  const getTaskIcon = (type: DetectedTask["type"]) => {
-    switch (type) {
-      case "Lab Order":
-        return { icon: Beaker, color: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/20" };
-      case "Prescription":
-        return { icon: Pill, color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20" };
-      case "Referral":
-        return { icon: UserPlus, color: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20" };
-      case "Follow-up":
-        return { icon: Activity, color: "text-green-500", bg: "bg-green-500/10", border: "border-green-500/20" };
-    }
+  const handleStopRecording = async () => {
+    setIsRecording(false);
+    await stopVoiceRecording();
+    toast.success("Recording stopped");
+    
+    // Generate SOAP note and recommended questions after recording stops
+    await generateSOAPNote();
+    await generateRecommendedQuestions();
   };
 
-  // Main consultation interface
+  const generateRecommendedQuestions = async () => {
+    if (!transcript) return;
+    
+    // Generate recommended follow-up questions based on transcript
+    const questions = [
+      "Can you describe the pain level on a scale of 1-10?",
+      "Have you experienced any side effects from current medications?",
+      "Are there any activities that worsen your symptoms?",
+      "Have you noticed any triggers for your condition?",
+      "How has this affected your daily activities?"
+    ];
+    setRecommendedQuestions(questions);
+  };
+
   return (
-    <div className="space-y-4 animate-fade-in">
-      {/* Header */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button 
-              variant="ghost" 
-              onClick={() => window.history.back()}
-              className="gap-2"
-            >
-              ← Back
-            </Button>
-            <div>
-              <h2 className="text-xl font-semibold text-foreground">
-                🏥 Outpatient Consultation
-              </h2>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {!isRecording && !conversationEnded && (
-              <Button 
-                onClick={handleStartRecording}
-                size="lg"
-                className="gap-2"
-              >
-                <Mic className="h-5 w-5" />
-                Start Recording
-              </Button>
-            )}
-            {isRecording && (
-              <>
-                <Badge variant="default" className="px-4 py-2">
-                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2" />
-                  Recording
-                </Badge>
-                <Button 
-                  onClick={handleEndConsultation}
-                  variant="destructive"
-                  className="gap-2"
-                  size="lg"
-                >
-                  <MicOff className="h-5 w-5" />
-                  End Consultation
-                </Button>
-              </>
-            )}
-            {conversationEnded && (
-              <Badge variant="secondary" className="px-4 py-2">
-                Ended
-              </Badge>
-            )}
+    <div className="flex h-[calc(100vh-88px)] gap-4 animate-fade-in">
+      {/* Left Sidebar - Patient List */}
+      <Card className="w-80 flex flex-col">
+        <div className="p-4 border-b border-border space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Patients</h2>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search patients..."
+              value={patientSearch}
+              onChange={(e) => setPatientSearch(e.target.value)}
+              className="pl-10 h-9"
+            />
           </div>
         </div>
+        
+        <ScrollArea className="flex-1">
+          <div className="divide-y divide-border">
+            {patients.map((patient) => (
+              <div
+                key={patient.id}
+                onClick={() => setSelectedPatient(patient.id)}
+                className={`p-4 cursor-pointer transition-all hover:bg-muted/50 ${
+                  selectedPatient === patient.id ? "bg-muted border-l-4 border-l-primary" : ""
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center flex-shrink-0">
+                    <User className="h-5 w-5 text-primary-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-sm text-foreground truncate">{patient.name}</h3>
+                    <p className="text-xs text-muted-foreground">{patient.age} yrs • {patient.mrn}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      {patient.visitCount > 0 ? (
+                        <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/20 gap-1">
+                          <RefreshCw className="h-3 w-3" />
+                          Return Visit
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/20">
+                          New Patient
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
       </Card>
 
-      {/* Main Content Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* AI Detected Tasks - LEFT SIDE (1/3) */}
-        <Card className="p-6 h-[600px] flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-primary" />
-                Tasks
-                <Badge variant="secondary" className="ml-2">{detectedTasks.length}</Badge>
-              </h3>
-            </div>
-            <Button 
-              size="sm" 
-              onClick={() => setIsAddingTask(true)}
-              className="gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Add
-            </Button>
-          </div>
-          
-          <ScrollArea className="flex-1">
-            <div className="space-y-3 pr-4">
-              {detectedTasks.map((task) => {
-                const taskStyle = getTaskIcon(task.type);
-                const Icon = taskStyle.icon;
-                
-                return (
-                  <Card 
-                    key={task.id}
-                    className={`p-4 border-2 ${taskStyle.border} hover:shadow-lg transition-all cursor-pointer group`}
-                    onClick={() => setSelectedTask(task)}
-                  >
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div className={`p-2 rounded-lg ${taskStyle.bg}`}>
-                          <Icon className={`h-5 w-5 ${taskStyle.color}`} />
-                        </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {task.timestamp}
-                        </Badge>
-                      </div>
-                      
-                      <div>
-                        <h4 className="font-semibold text-foreground mb-1 text-sm">{task.type}</h4>
-                        <p className="text-xs text-foreground mb-2 line-clamp-2">{task.description}</p>
-                      </div>
-                      
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="w-full group-hover:bg-primary group-hover:text-primary-foreground text-xs"
-                      >
-                        Review
-                      </Button>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        </Card>
-
-        {/* Live Transcription - RIGHT SIDE (2/3) */}
-        <Card className="p-6 h-[600px] flex flex-col lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Mic className="h-5 w-5 text-primary" />
-              {!isRecording && !conversationEnded ? "Consultation Transcription" : isRecording ? "Live Transcription" : "Consultation Summary"}
-            </h3>
-            {conversationEnded && (
-              <Button variant="outline" size="sm" className="gap-2">
-                <Save className="h-4 w-4" />
-                Save Note
-              </Button>
-            )}
-          </div>
-          
-          <ScrollArea className="flex-1">
-            {!isRecording && !conversationEnded ? (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                  <Mic className="h-10 w-10 text-primary" />
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col space-y-4 overflow-hidden">
+        {/* Patient Header */}
+        {currentPatient && (
+          <Card className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center">
+                  <User className="h-6 w-6 text-primary-foreground" />
                 </div>
-                <p className="text-lg font-medium mb-2">Ready to Start</p>
-                <p className="text-sm text-center max-w-md">
-                  Click the "Start Recording" button above to begin the consultation transcription
-                </p>
-              </div>
-            ) : isRecording ? (
-              <div className="space-y-3 pr-4">
-                <div className="bg-muted/30 p-4 rounded-lg">
-                  <p className="text-sm text-foreground whitespace-pre-wrap">
-                    {transcript || "Listening..."}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 text-muted-foreground mt-4 pt-4 border-t">
-                  <div className="flex gap-1">
-                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">{currentPatient.name}</h2>
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <span>{currentPatient.age} years • MRN: {currentPatient.mrn}</span>
+                    {isReturnVisit && (
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20 gap-1">
+                        <RefreshCw className="h-3 w-3" />
+                        Return Visit ({currentPatient.visitCount} total)
+                      </Badge>
+                    )}
                   </div>
-                  <p className="text-xs">Listening and detecting tasks...</p>
-                  {isDetectingTasks && (
-                    <Loader2 className="h-3 w-3 animate-spin ml-2" />
+                  {currentPatient.conditions.length > 0 && (
+                    <div className="flex gap-2 mt-2">
+                      {currentPatient.conditions.map((condition, idx) => (
+                        <Badge key={idx} variant="secondary" className="text-xs">
+                          {condition}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {isReturnVisit && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Last visit: {currentPatient.lastVisit}
+                    </p>
                   )}
                 </div>
               </div>
-            ) : (
-              <div className="space-y-4 pr-4">
-                {isGeneratingSOAP ? (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-                    <p className="text-muted-foreground">Generating SOAP note...</p>
-                  </div>
-                ) : soapNote ? (
+              <Button
+                onClick={isRecording ? handleStopRecording : handleStartRecording}
+                variant={isRecording ? "destructive" : "hero"}
+                size="lg"
+                className="gap-2"
+              >
+                {isRecording ? (
                   <>
-                    <div className="border-l-4 border-primary pl-4 py-2">
-                      <h4 className="font-semibold text-foreground mb-2">Subjective</h4>
-                      <p className="text-sm text-foreground">{soapNote.subjective}</p>
-                    </div>
-                    
-                    <div className="border-l-4 border-accent pl-4 py-2">
-                      <h4 className="font-semibold text-foreground mb-2">Objective</h4>
-                      <p className="text-sm text-foreground">{soapNote.objective}</p>
-                    </div>
-                    
-                    <div className="border-l-4 border-primary pl-4 py-2">
-                      <h4 className="font-semibold text-foreground mb-2">Assessment</h4>
-                      <p className="text-sm text-foreground whitespace-pre-line">{soapNote.assessment}</p>
-                    </div>
-                    
-                    <div className="border-l-4 border-accent pl-4 py-2">
-                      <h4 className="font-semibold text-foreground mb-2">Plan</h4>
-                      <p className="text-sm text-foreground whitespace-pre-line">{soapNote.plan}</p>
-                    </div>
+                    <Square className="h-5 w-5" />
+                    Stop Recording
                   </>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                    <p>No SOAP note generated yet</p>
-                  </div>
+                  <>
+                    <Mic className="h-5 w-5" />
+                    Start Consultation
+                  </>
                 )}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {/* Recording & Transcription with Tabs */}
+        <Card className="flex-1 flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-border">
+            <h2 className="text-xl font-semibold text-foreground">Live Transcription</h2>
+          </div>
+
+          <Tabs defaultValue="transcript" className="flex-1 flex flex-col">
+            <TabsList className="mx-4 mt-4">
+              <TabsTrigger value="transcript">Transcript</TabsTrigger>
+              <TabsTrigger value="questions">Recommended Questions</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="transcript" className="flex-1 p-4 overflow-hidden">
+              {isListening && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg mb-4">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  Recording in progress...
+                </div>
+              )}
+
+              <ScrollArea className="h-full border border-border rounded-lg p-4 bg-background">
+                {transcript ? (
+                  <p className="text-foreground whitespace-pre-wrap">{transcript}</p>
+                ) : (
+                  <p className="text-muted-foreground italic">
+                    Click "Start Consultation" to begin transcribing...
+                  </p>
+                )}
+              </ScrollArea>
+            </TabsContent>
+
+            <TabsContent value="questions" className="flex-1 p-4 overflow-hidden">
+              <ScrollArea className="h-full">
+                {recommendedQuestions.length > 0 ? (
+                  <div className="space-y-3">
+                    {recommendedQuestions.map((question, idx) => (
+                      <Card key={idx} className="p-4 hover:bg-muted/50 transition-colors cursor-pointer">
+                        <p className="text-sm text-foreground">{question}</p>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground italic">
+                    Recommended questions will appear here after consultation starts...
+                  </p>
+                )}
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        </Card>
+
+        {/* SOAP Note */}
+        <Card className="flex-1 flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-foreground">SOAP Note</h2>
+            {isGeneratingSOAP && (
+              <Badge variant="secondary" className="gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Generating...
+              </Badge>
+            )}
+          </div>
+
+          <ScrollArea className="flex-1 p-6">
+            {soapNote ? (
+              <div className="space-y-6">
+                {soapNote.split('\n\n').map((section, idx) => {
+                  const lines = section.split('\n');
+                  const title = lines[0];
+                  const content = lines.slice(1).join('\n');
+                  
+                  return (
+                    <div key={idx} className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-1 h-8 bg-gradient-primary rounded-full" />
+                        <h3 className="text-lg font-bold text-foreground">{title}</h3>
+                      </div>
+                      <Card className="p-4 bg-muted/30">
+                        <p className="text-foreground whitespace-pre-wrap leading-relaxed">{content}</p>
+                      </Card>
+                      {idx < soapNote.split('\n\n').length - 1 && (
+                        <Separator className="my-4" />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+            ) : (
+              <p className="text-muted-foreground italic">
+                SOAP note will be automatically generated after the consultation ends...
+              </p>
             )}
           </ScrollArea>
         </Card>
       </div>
-
-      {/* Add Task Dialog */}
-      <Dialog open={isAddingTask} onOpenChange={setIsAddingTask}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add New Task</DialogTitle>
-            <DialogDescription>
-              Manually add a task to the consultation workflow
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="task-type">Task Type</Label>
-              <Select value={newTaskType} onValueChange={(value) => setNewTaskType(value as DetectedTask["type"])}>
-                <SelectTrigger id="task-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Lab Order">Lab Order</SelectItem>
-                  <SelectItem value="Prescription">Prescription</SelectItem>
-                  <SelectItem value="Referral">Referral</SelectItem>
-                  <SelectItem value="Follow-up">Follow-up</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="task-description">Description</Label>
-              <Textarea
-                id="task-description"
-                placeholder="Enter task details..."
-                value={newTaskDescription}
-                onChange={(e) => setNewTaskDescription(e.target.value)}
-                rows={4}
-              />
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddingTask(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddTask}>
-              Add Task
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Task Review Modal */}
-      {selectedTask && (
-        <TaskReviewModal 
-          task={selectedTask}
-          onClose={() => setSelectedTask(null)}
-          onAccept={(task) => {
-            toast({
-              title: "Task Accepted",
-              description: `${task.type} has been processed and sent.`,
-            });
-            setSelectedTask(null);
-          }}
-        />
-      )}
     </div>
   );
 };
