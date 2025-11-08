@@ -1,9 +1,11 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Activity, FileText, Clock, CheckCircle2, AlertCircle, TrendingUp, Mic } from "lucide-react";
+import { Activity, FileText, Clock, CheckCircle2, AlertCircle, TrendingUp, Mic, Hospital, BedDouble, ArrowRight, Users, ClipboardList } from "lucide-react";
+
+type ConsultationMode = "outpatient" | "inpatient";
 
 interface DashboardOverviewProps {
-  onStartConsultation: () => void;
+  onStartConsultation: (mode: ConsultationMode) => void;
 }
 
 const DashboardOverview = ({ onStartConsultation }: DashboardOverviewProps) => {
@@ -52,22 +54,125 @@ const DashboardOverview = ({ onStartConsultation }: DashboardOverviewProps) => {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      {/* Quick Start */}
+      {/* Welcome Header */}
       <div className="bg-gradient-primary rounded-2xl p-8 text-primary-foreground shadow-elevated">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold">Welcome back, Dr. Mitchell</h1>
-            <p className="text-primary-foreground/90">Ready to start your next consultation?</p>
-          </div>
-          <Button 
-            onClick={onStartConsultation}
-            size="lg" 
-            variant="secondary"
-            className="gap-2 shadow-lg hover:shadow-xl transition-all"
-          >
-            <Mic className="h-5 w-5" />
-            Start Consultation
-          </Button>
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold">Welcome back, Dr. Mitchell</h1>
+          <p className="text-primary-foreground/90">Select consultation type to begin your workflow</p>
+        </div>
+      </div>
+
+      {/* Consultation Mode Selection */}
+      <div>
+        <h2 className="text-2xl font-bold text-foreground mb-4">Start New Consultation</h2>
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Outpatient Card */}
+          <Card className="group relative overflow-hidden border-2 hover:border-primary/50 transition-all hover:shadow-elevated cursor-pointer">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500" />
+            <div className="relative p-8 space-y-6">
+              <div className="flex items-start justify-between">
+                <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
+                  <Hospital className="h-8 w-8 text-primary" />
+                </div>
+                <div className="px-3 py-1 rounded-full bg-accent/10 text-accent text-xs font-semibold">
+                  Single Visit
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <h3 className="text-2xl font-bold text-foreground">Outpatient Care</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  For patients visiting the clinic for diagnosis, treatment, or follow-up without hospital admission.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-4 border-t border-border">
+                <p className="text-sm font-semibold text-foreground">Typical workflows:</p>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-accent flex-shrink-0" />
+                    <span>Consultation & examination</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-accent flex-shrink-0" />
+                    <span>Lab orders & prescriptions</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-accent flex-shrink-0" />
+                    <span>Specialist referrals</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-accent flex-shrink-0" />
+                    <span>Follow-up scheduling</span>
+                  </li>
+                </ul>
+              </div>
+
+              <Button 
+                onClick={() => onStartConsultation("outpatient")}
+                className="w-full gap-2 group-hover:bg-primary group-hover:text-primary-foreground"
+                size="lg"
+              >
+                <Mic className="h-5 w-5" />
+                Start Outpatient Consultation
+                <ArrowRight className="h-4 w-4 ml-auto group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </div>
+          </Card>
+
+          {/* Inpatient Card */}
+          <Card className="group relative overflow-hidden border-2 hover:border-primary/50 transition-all hover:shadow-elevated cursor-pointer">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500" />
+            <div className="relative p-8 space-y-6">
+              <div className="flex items-start justify-between">
+                <div className="p-4 rounded-xl bg-accent/10 border border-accent/20">
+                  <BedDouble className="h-8 w-8 text-accent" />
+                </div>
+                <div className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                  Multi-Day Stay
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <h3 className="text-2xl font-bold text-foreground">Inpatient Care</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  For admitted patients requiring continuous monitoring, treatment, and coordinated care across multiple teams.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-4 border-t border-border">
+                <p className="text-sm font-semibold text-foreground">Typical workflows:</p>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-accent flex-shrink-0" />
+                    <span>Daily rounds & progress notes</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-accent flex-shrink-0" />
+                    <span>Nurse task coordination</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-accent flex-shrink-0" />
+                    <span>Multi-department orders</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-accent flex-shrink-0" />
+                    <span>Continuous vital monitoring</span>
+                  </li>
+                </ul>
+              </div>
+
+              <Button 
+                onClick={() => onStartConsultation("inpatient")}
+                className="w-full gap-2 group-hover:bg-accent group-hover:text-accent-foreground"
+                size="lg"
+              >
+                <Mic className="h-5 w-5" />
+                Start Inpatient Rounds
+                <ArrowRight className="h-4 w-4 ml-auto group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </div>
+          </Card>
         </div>
       </div>
 

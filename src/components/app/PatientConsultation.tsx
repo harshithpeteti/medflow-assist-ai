@@ -12,6 +12,10 @@ import TaskReviewModal from "./TaskReviewModal";
 
 type ConsultationMode = "outpatient" | "inpatient";
 
+interface PatientConsultationProps {
+  mode: ConsultationMode;
+}
+
 interface DetectedTask {
   id: string;
   type: "Lab Order" | "Prescription" | "Referral" | "Follow-up";
@@ -22,13 +26,12 @@ interface DetectedTask {
   timestamp: string;
 }
 
-const PatientConsultation = () => {
+const PatientConsultation = ({ mode }: PatientConsultationProps) => {
   const [patientName, setPatientName] = useState("");
   const [patientSelected, setPatientSelected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [selectedTask, setSelectedTask] = useState<DetectedTask | null>(null);
   const [chiefComplaint, setChiefComplaint] = useState("");
-  const [mode, setMode] = useState<ConsultationMode>("outpatient");
   const { toast } = useToast();
 
   const transcript = [
@@ -143,112 +146,115 @@ const PatientConsultation = () => {
     }
   };
 
-  const getModeDescription = () => {
-    return mode === "outpatient" 
-      ? "Single consultation for labs, prescriptions, and referrals"
-      : "Continuous hospital stay with daily rounds and nurse monitoring";
-  };
-
   // Before selecting patient
   if (!patientSelected) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-88px)] animate-fade-in">
-        <Card className="w-full max-w-2xl p-8">
+      <div className="max-w-3xl mx-auto space-y-6 animate-fade-in py-8">
+        <div className="flex items-center gap-4 mb-6">
+          <Button 
+            variant="ghost" 
+            onClick={() => window.history.back()}
+            className="gap-2"
+          >
+            ← Back
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              {mode === "inpatient" ? "🛏️ Inpatient Rounds" : "🏥 Outpatient Consultation"}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {mode === "inpatient" 
+                ? "Multi-day hospital stay with continuous monitoring"
+                : "Single-visit clinic consultation"}
+            </p>
+          </div>
+        </div>
+
+        <Card className="p-8 border-2">
           <div className="space-y-6">
-            <div className="text-center space-y-2">
-              <div className="w-16 h-16 rounded-full bg-gradient-primary flex items-center justify-center mx-auto mb-4">
-                <User className="h-8 w-8 text-primary-foreground" />
-              </div>
-              <h1 className="text-3xl font-bold text-foreground">Start New Consultation</h1>
-              <p className="text-muted-foreground">Enter patient information to begin</p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Consultation Mode</label>
-                <Tabs value={mode} onValueChange={(v) => setMode(v as ConsultationMode)} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="outpatient">🏥 Outpatient</TabsTrigger>
-                    <TabsTrigger value="inpatient">🛏️ Inpatient</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-                <p className="text-xs text-muted-foreground mt-2">{getModeDescription()}</p>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Patient Name</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search or enter patient name..."
-                    value={patientName}
-                    onChange={(e) => setPatientName(e.target.value)}
-                    className="pl-10"
-                    onKeyDown={(e) => e.key === 'Enter' && handleStartConsultation()}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Chief Complaint (Optional)</label>
-                <Textarea
-                  placeholder="Brief description of patient's concern..."
-                  value={chiefComplaint}
-                  onChange={(e) => setChiefComplaint(e.target.value)}
-                  className="min-h-[100px]"
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground">Patient Name *</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                  placeholder="Search patient by name or ID..."
+                  value={patientName}
+                  onChange={(e) => setPatientName(e.target.value)}
+                  className="pl-11 h-12 text-base"
+                  onKeyDown={(e) => e.key === 'Enter' && handleStartConsultation()}
+                  autoFocus
                 />
               </div>
+              <p className="text-xs text-muted-foreground">Press Enter to continue or search existing records</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground">
+                {mode === "inpatient" ? "Current Condition / Reason for Rounds" : "Chief Complaint"}
+                <span className="text-muted-foreground font-normal ml-2">(Optional)</span>
+              </label>
+              <Textarea
+                placeholder={mode === "inpatient" 
+                  ? "e.g., Post-operative day 2, monitoring recovery..."
+                  : "e.g., Chest pain, shortness of breath..."
+                }
+                value={chiefComplaint}
+                onChange={(e) => setChiefComplaint(e.target.value)}
+                className="min-h-[100px] text-base"
+              />
             </div>
 
             <Button 
               onClick={handleStartConsultation}
-              variant="hero" 
               size="lg" 
-              className="w-full gap-2"
+              className="w-full gap-3 h-14 text-base font-semibold bg-gradient-primary hover:opacity-90"
             >
-              <Mic className="h-5 w-5" />
-              Start Consultation
+              <Mic className="h-6 w-6" />
+              {mode === "inpatient" ? "Begin Inpatient Rounds" : "Start Consultation"}
             </Button>
+          </div>
+        </Card>
 
-            <div className="border-t border-border pt-4">
-              <h3 className="text-sm font-semibold text-foreground mb-3">Workflow Steps</h3>
-              <div className="space-y-2">
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-semibold text-primary">1</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Enter Patient Information</p>
-                    <p className="text-xs text-muted-foreground">Search for existing patient or add new</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-semibold text-primary">2</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Start Recording</p>
-                    <p className="text-xs text-muted-foreground">AI will transcribe and detect clinical tasks</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-semibold text-primary">3</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Review & Accept Tasks</p>
-                    <p className="text-xs text-muted-foreground">Approve prescriptions, orders, and referrals</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-semibold text-primary">4</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Save Clinical Notes</p>
-                    <p className="text-xs text-muted-foreground">AI-generated documentation ready to sign</p>
-                  </div>
-                </div>
+        <Card className="p-6 bg-muted/30">
+          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+            <FileTextIcon className="h-4 w-4 text-primary" />
+            AI-Powered Workflow
+          </h3>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Mic className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Voice Transcription</p>
+                <p className="text-xs text-muted-foreground">Real-time speech-to-text</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
+                <Beaker className="h-4 w-4 text-accent" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Auto Task Detection</p>
+                <p className="text-xs text-muted-foreground">Labs, meds, referrals</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <FileTextIcon className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Clinical Notes</p>
+                <p className="text-xs text-muted-foreground">AI-generated documentation</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
+                <Activity className="h-4 w-4 text-accent" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Task Routing</p>
+                <p className="text-xs text-muted-foreground">Auto-assign to teams</p>
               </div>
             </div>
           </div>
