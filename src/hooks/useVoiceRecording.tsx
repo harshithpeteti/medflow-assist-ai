@@ -91,7 +91,7 @@ export const useVoiceRecording = () => {
           audioChunksRef.current = [];
           mediaRecorderRef.current.start();
         }
-      }, 3000);
+      }, 1500);
 
       // Store interval for cleanup
       (mediaRecorderRef.current as any).chunkInterval = chunkInterval;
