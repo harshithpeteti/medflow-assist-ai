@@ -2,14 +2,58 @@ import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-export const useVoiceRecording = () => {
+interface VoiceRecordingOptions {
+  language?: string;
+  onSpeakerDetected?: (speaker: 'doctor' | 'patient') => void;
+}
+
+export const useVoiceRecording = (options: VoiceRecordingOptions = {}) => {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [currentSpeaker, setCurrentSpeaker] = useState<'doctor' | 'patient'>('patient');
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyzerRef = useRef<AnalyserNode | null>(null);
+  const pitchDetectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Analyze pitch to detect speaker changes
+  const analyzePitch = useCallback(() => {
+    if (!analyzerRef.current || !audioContextRef.current) return;
+
+    const bufferLength = analyzerRef.current.fftSize;
+    const dataArray = new Float32Array(bufferLength);
+    analyzerRef.current.getFloatTimeDomainData(dataArray);
+
+    // Simple autocorrelation for pitch detection
+    let maxCorrelation = 0;
+    let fundamentalFrequency = 0;
+    
+    for (let lag = 1; lag < bufferLength / 2; lag++) {
+      let correlation = 0;
+      for (let i = 0; i < bufferLength / 2; i++) {
+        correlation += dataArray[i] * dataArray[i + lag];
+      }
+      if (correlation > maxCorrelation && correlation > 0.01) {
+        maxCorrelation = correlation;
+        fundamentalFrequency = audioContextRef.current!.sampleRate / lag;
+      }
+    }
+
+    // Detect speaker based on pitch (male voices typically 85-180 Hz, female/child 165-300 Hz)
+    if (fundamentalFrequency > 0) {
+      const isLowPitch = fundamentalFrequency < 165;
+      const detectedSpeaker = isLowPitch ? 'doctor' : 'patient';
+      
+      if (detectedSpeaker !== currentSpeaker) {
+        setCurrentSpeaker(detectedSpeaker);
+        options.onSpeakerDetected?.(detectedSpeaker);
+      }
+    }
+  }, [currentSpeaker, options]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -25,6 +69,16 @@ export const useVoiceRecording = () => {
       
       streamRef.current = stream;
       audioChunksRef.current = [];
+
+      // Set up audio analysis for speaker detection
+      audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      analyzerRef.current = audioContextRef.current.createAnalyser();
+      analyzerRef.current.fftSize = 2048;
+      source.connect(analyzerRef.current);
+
+      // Start pitch detection for speaker identification
+      pitchDetectionIntervalRef.current = setInterval(analyzePitch, 500);
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
@@ -54,7 +108,10 @@ export const useVoiceRecording = () => {
           try {
             console.log("Sending audio to Whisper API...");
             const { data, error } = await supabase.functions.invoke('transcribe-audio', {
-              body: { audio: base64Audio }
+              body: { 
+                audio: base64Audio,
+                language: options.language || 'auto'
+              }
             });
 
             if (error) {
@@ -66,7 +123,9 @@ export const useVoiceRecording = () => {
 
             if (data?.text) {
               console.log("Transcription received:", data.text);
-              setTranscript(prev => prev + data.text + " ");
+              // Add speaker label to transcript
+              const speakerLabel = currentSpeaker === 'doctor' ? '[Doctor]' : '[Patient]';
+              setTranscript(prev => prev + `${speakerLabel} ${data.text} `);
             }
           } catch (err) {
             console.error("Error calling transcription:", err);
@@ -113,6 +172,12 @@ export const useVoiceRecording = () => {
         clearInterval(interval);
       }
       
+      // Clear pitch detection interval
+      if (pitchDetectionIntervalRef.current) {
+        clearInterval(pitchDetectionIntervalRef.current);
+        pitchDetectionIntervalRef.current = null;
+      }
+      
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       
@@ -121,6 +186,12 @@ export const useVoiceRecording = () => {
         streamRef.current = null;
       }
       
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      
+      analyzerRef.current = null;
       mediaRecorderRef.current = null;
       console.log("Recording stopped");
     }
@@ -134,6 +205,7 @@ export const useVoiceRecording = () => {
     isRecording,
     isListening: isRecording,
     transcript,
+    currentSpeaker,
     startRecording,
     stopRecording,
     getCurrentTranscript,

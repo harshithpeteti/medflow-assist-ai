@@ -31,7 +31,7 @@ import MedicalNotesPreviewModal from "./MedicalNotesPreviewModal";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useVoiceRecording } from "@/hooks/useVoiceRecording";
-import { useVoiceAnalysis } from "@/hooks/useVoiceAnalysis";
+import { LanguageSelector } from "./LanguageSelector";
 
 interface DetectedTask {
   id: string;
@@ -59,11 +59,12 @@ const PatientConsultation = () => {
   const [editableTask, setEditableTask] = useState<DetectedTask | null>(null);
   const [showMedicalNotesPreview, setShowMedicalNotesPreview] = useState(false);
   const [generatedSOAP, setGeneratedSOAP] = useState<any>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState("auto");
   
   // Speaker identification
-  const [currentSpeaker, setCurrentSpeaker] = useState<"Doctor" | "Patient">("Doctor");
+  const [currentSpeaker, setCurrentSpeaker] = useState<"doctor" | "patient">("doctor");
   const [conversationTranscript, setConversationTranscript] = useState<Array<{
-    speaker: "Doctor" | "Patient";
+    speaker: "doctor" | "patient";
     text: string;
     timestamp: number;
   }>>([]);
@@ -71,17 +72,22 @@ const PatientConsultation = () => {
   const { 
     transcript,
     isListening,
+    currentSpeaker: detectedSpeaker,
     startRecording: startVoiceRecording,
     stopRecording: stopVoiceRecording,
     error: voiceError
-  } = useVoiceRecording();
+  } = useVoiceRecording({
+    language: selectedLanguage,
+    onSpeakerDetected: (speaker) => {
+      setCurrentSpeaker(speaker);
+      console.log("Speaker detected:", speaker);
+    }
+  });
 
-  const { setupAnalyzer, analyzePitch, cleanup: cleanupAnalyzer } = useVoiceAnalysis();
   
   const lastTranscriptLength = useRef(0);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
-  const lastSpeaker = useRef<"Doctor" | "Patient">("Doctor");
-  const analysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSpeaker = useRef<"doctor" | "patient">("doctor");
   
   useEffect(() => {
     if (transcript.length > lastTranscriptLength.current && isRecording) {
@@ -204,25 +210,8 @@ const PatientConsultation = () => {
       setIsRecording(true);
       setConversationTranscript([]);
       lastTranscriptLength.current = 0;
-      lastSpeaker.current = "Doctor";
-      setCurrentSpeaker("Doctor");
-      
-      // Get microphone access and setup voice analysis
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      setupAnalyzer(stream);
-      
-      // Start voice pitch analysis for automatic speaker detection
-      analysisIntervalRef.current = setInterval(() => {
-        const { isLowPitch, confidence } = analyzePitch();
-        
-        // Only switch if confidence is high enough
-        if (confidence > 0.3) {
-          const detectedSpeaker: "Doctor" | "Patient" = isLowPitch ? "Doctor" : "Patient";
-          if (detectedSpeaker !== currentSpeaker) {
-            setCurrentSpeaker(detectedSpeaker);
-          }
-        }
-      }, 500); // Analyze every 500ms
+      lastSpeaker.current = "doctor";
+      setCurrentSpeaker("doctor");
       
       await startVoiceRecording();
       toast.success("Recording started - Speaker detection active");
@@ -235,13 +224,6 @@ const PatientConsultation = () => {
 
   const handleStopRecording = async () => {
     setIsRecording(false);
-    
-    // Cleanup voice analysis
-    if (analysisIntervalRef.current) {
-      clearInterval(analysisIntervalRef.current);
-      analysisIntervalRef.current = null;
-    }
-    cleanupAnalyzer();
     
     await stopVoiceRecording();
     toast.success("Recording stopped - Analyzing consultation...");
@@ -407,22 +389,31 @@ const PatientConsultation = () => {
                   Enter patient name or ID. System will detect if this is a return visit.
                 </p>
               </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Enter patient name or ID..."
-                  value={patientName}
-                  onChange={(e) => setPatientName(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && handleStartConsultation()}
-                  className="flex-1 text-lg h-14"
-                />
-                <Button 
-                  onClick={handleStartConsultation} 
-                  size="lg"
-                  className="gap-2 h-14 px-8"
-                >
-                  <User className="h-5 w-5" />
-                  Start
-                </Button>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter patient name or ID..."
+                    value={patientName}
+                    onChange={(e) => setPatientName(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleStartConsultation()}
+                    className="flex-1 text-lg h-14"
+                  />
+                  <Button 
+                    onClick={handleStartConsultation} 
+                    size="lg"
+                    className="gap-2 h-14 px-8"
+                  >
+                    <User className="h-5 w-5" />
+                    Start
+                  </Button>
+                </div>
+                <div className="flex justify-center">
+                  <LanguageSelector 
+                    value={selectedLanguage}
+                    onChange={setSelectedLanguage}
+                    disabled={false}
+                  />
+                </div>
               </div>
             </div>
           </Card>
@@ -697,7 +688,7 @@ const PatientConsultation = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="gap-1">
-                      {currentSpeaker === "Doctor" ? (
+                      {currentSpeaker === "doctor" ? (
                         <>
                           <Stethoscope className="h-3 w-3" />
                           Doctor
@@ -720,27 +711,27 @@ const PatientConsultation = () => {
                       {conversationTranscript.map((entry, idx) => (
                         <div 
                           key={idx} 
-                          className={`flex gap-3 animate-fade-in ${entry.speaker === "Doctor" ? "justify-start" : "justify-end"}`}
+                          className={`flex gap-3 animate-fade-in ${entry.speaker === "doctor" ? "justify-start" : "justify-end"}`}
                           style={{ animationDelay: `${idx * 50}ms` }}
                         >
-                          <div className={`flex gap-2 max-w-[85%] ${entry.speaker === "Patient" ? "flex-row-reverse" : ""}`}>
+                          <div className={`flex gap-2 max-w-[85%] ${entry.speaker === "patient" ? "flex-row-reverse" : ""}`}>
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                              entry.speaker === "Doctor" 
+                              entry.speaker === "doctor" 
                                 ? "bg-blue-500/10 text-blue-500" 
                                 : "bg-green-500/10 text-green-500"
                             }`}>
-                              {entry.speaker === "Doctor" ? (
+                              {entry.speaker === "doctor" ? (
                                 <Stethoscope className="h-4 w-4" />
                               ) : (
                                 <User className="h-4 w-4" />
                               )}
                             </div>
                             <div className={`rounded-lg p-3 ${
-                              entry.speaker === "Doctor"
+                              entry.speaker === "doctor"
                                 ? "bg-blue-500/10 border border-blue-500/20"
                                 : "bg-green-500/10 border border-green-500/20"
                             }`}>
-                              <p className="text-xs font-semibold mb-1 text-muted-foreground">
+                              <p className="text-xs font-semibold mb-1 text-muted-foreground capitalize">
                                 {entry.speaker}
                               </p>
                               <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{entry.text}</p>
