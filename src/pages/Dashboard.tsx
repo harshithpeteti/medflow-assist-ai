@@ -8,7 +8,6 @@ import PatientList from "@/components/app/PatientList";
 import DashboardOverview from "@/components/app/DashboardOverview";
 import { useAuth } from "@/hooks/useAuth";
 import { Toaster } from "@/components/ui/sonner";
-import { DevDataButton } from "@/components/DevDataButton";
 
 type View = "overview" | "consultation" | "notes" | "tasks" | "patients";
 
@@ -54,7 +53,6 @@ const Dashboard = () => {
       <main className="container mx-auto px-6 py-8">
         {renderView()}
       </main>
-      <DevDataButton />
       <Toaster />
     </div>
   );
