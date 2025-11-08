@@ -20,9 +20,11 @@ import {
   Activity,
   Plus,
   X,
-  CheckCircle
+  CheckCircle,
+  History
 } from "lucide-react";
 import SOAPReviewModal from "./SOAPReviewModal";
+import PreviousVisitsModal from "./PreviousVisitsModal";
 import { toast } from "sonner";
 import { useVoiceRecording } from "@/hooks/useVoiceRecording";
 
@@ -56,6 +58,8 @@ const PatientConsultation = () => {
   const [showSOAPReview, setShowSOAPReview] = useState(false);
   const [newTaskDescription, setNewTaskDescription] = useState("");
   const [newTaskType, setNewTaskType] = useState<DetectedTask["type"]>("Lab Order");
+  const [showPreviousVisits, setShowPreviousVisits] = useState(false);
+  const [previousVisits, setPreviousVisits] = useState<any[]>([]);
 
   const { 
     transcript,
@@ -104,12 +108,19 @@ const PatientConsultation = () => {
     }
   }, [voiceError]);
 
-  // Set return visit status when patient is selected
+  // Set return visit status and load previous visits when patient is selected
   useEffect(() => {
     if (currentPatient && currentPatient.visitCount > 0) {
       setIsReturnVisit(true);
+      // Load previous visits from localStorage
+      const storedNotes = JSON.parse(localStorage.getItem("clinicalNotes") || "[]");
+      const patientVisits = storedNotes.filter(
+        (note: any) => note.patientName === currentPatient.name
+      );
+      setPreviousVisits(patientVisits);
     } else {
       setIsReturnVisit(false);
+      setPreviousVisits([]);
     }
   }, [currentPatient]);
 
@@ -347,10 +358,21 @@ const PatientConsultation = () => {
 
                   <div className="flex items-center gap-2">
                     {isReturnVisit ? (
-                      <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
-                        <RefreshCw className="h-3 w-3 mr-1" />
-                        Return Visit ({currentPatient.visitCount} total)
-                      </Badge>
+                      <>
+                        <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                          Return Visit ({currentPatient.visitCount} total)
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowPreviousVisits(true)}
+                          className="gap-2 h-7 text-xs"
+                        >
+                          <History className="h-3 w-3" />
+                          View Previous Visits
+                        </Button>
+                      </>
                     ) : (
                       <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
                         New Patient
@@ -579,6 +601,14 @@ const PatientConsultation = () => {
           patientName={currentPatient?.name || ""}
           patientMRN={currentPatient?.mrn || ""}
           transcript={transcript}
+        />
+
+        {/* Previous Visits Modal */}
+        <PreviousVisitsModal
+          open={showPreviousVisits}
+          onClose={() => setShowPreviousVisits(false)}
+          visits={previousVisits}
+          patientName={currentPatient?.name || ""}
         />
       </div>
     </div>

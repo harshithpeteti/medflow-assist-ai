@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +28,11 @@ const SOAPReviewModal = ({ open, onClose, soapNote, patientName, patientMRN, tra
   const [editedNote, setEditedNote] = useState<SoapNote | null>(soapNote);
   const [editingSection, setEditingSection] = useState<string | null>(null);
 
+  // Update editedNote when soapNote prop changes
+  useEffect(() => {
+    setEditedNote(soapNote);
+  }, [soapNote]);
+
   const handleApprove = () => {
     if (!editedNote) return;
 
@@ -43,7 +48,12 @@ const SOAPReviewModal = ({ open, onClose, soapNote, patientName, patientMRN, tra
     };
     localStorage.setItem("clinicalNotes", JSON.stringify([newNote, ...existingNotes]));
     
-    toast.success("SOAP note approved and saved");
+    // Dispatch storage event to notify other components
+    window.dispatchEvent(new Event('storage'));
+    
+    toast.success("SOAP note approved and saved to Clinical Notes", {
+      description: "The note is now available in the Clinical Notes section"
+    });
     onClose();
   };
 

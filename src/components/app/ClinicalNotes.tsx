@@ -35,9 +35,14 @@ const ClinicalNotes = () => {
     };
     
     loadNotes();
+    
     // Listen for storage events to refresh when new notes are added
-    window.addEventListener('storage', loadNotes);
-    return () => window.removeEventListener('storage', loadNotes);
+    const handleStorageChange = () => {
+      loadNotes();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const filteredNotes = notes.filter(
