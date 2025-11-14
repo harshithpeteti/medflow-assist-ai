@@ -69,7 +69,6 @@ interface TranscriptSegment {
 export class RealtimeChat {
   private pc: RTCPeerConnection | null = null;
   private dc: RTCDataChannel | null = null;
-  private audioEl: HTMLAudioElement;
   private recorder: AudioRecorder | null = null;
   private currentSpeaker: 'doctor' | 'patient' = 'doctor';
   private lastSpeechTime: number = 0;
@@ -80,8 +79,7 @@ export class RealtimeChat {
     private onTranscript: (segment: TranscriptSegment) => void,
     private onError: (error: string) => void
   ) {
-    this.audioEl = document.createElement("audio");
-    this.audioEl.autoplay = true;
+    // Audio playback disabled - only using transcription
   }
 
   async init() {
@@ -101,10 +99,9 @@ export class RealtimeChat {
       // Create peer connection
       this.pc = new RTCPeerConnection();
 
-      // Handle remote audio
+      // Remote audio handling disabled - only using transcription
       this.pc.ontrack = e => {
-        console.log('Received remote audio track');
-        this.audioEl.srcObject = e.streams[0];
+        console.log('Received remote audio track (not playing)');
       };
 
       // Add local audio track
@@ -235,6 +232,5 @@ export class RealtimeChat {
     this.recorder?.stop();
     this.dc?.close();
     this.pc?.close();
-    this.audioEl.srcObject = null;
   }
 }

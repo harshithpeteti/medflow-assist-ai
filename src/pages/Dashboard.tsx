@@ -16,12 +16,6 @@ const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!user) {
-      navigate("/auth");
-    }
-  }, [user, navigate]);
-
   const renderView = () => {
     switch (currentView) {
       case "overview":
